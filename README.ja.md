@@ -145,6 +145,7 @@ PYTHONPATH=examples python3 -m unittest discover -s examples -p 'test_*.py'
 - [docs/reading-order.md](docs/reading-order.md): Lean未経験者向けの読む順番。
 - [docs/lean-vocabulary.md](docs/lean-vocabulary.md): `namespace`、`theorem`、`cases`、`simp` などの初出説明。
 - [docs/domain-vocabulary.md](docs/domain-vocabulary.md): 待ち核、可約、既約など、このプロジェクト内の説明語彙。
+- [docs/seven-tile-prior-work-comparison.md](docs/seven-tile-prior-work-comparison.md): 7枚形の全列挙結果と既存の7枚以下パターン一覧との対照。
 
 作成・保守側の方針:
 
