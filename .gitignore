@@ -24,3 +24,18 @@ Thumbbs.db
 
 # Log files
 *.log
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
