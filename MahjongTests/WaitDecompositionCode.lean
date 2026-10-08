@@ -11,9 +11,52 @@ private def testHand1223 : List Tile := manzu [0, 1, 1, 2]
 private def testHand1233 : List Tile := manzu [0, 1, 2, 2]
 private def testHand1167888 : List Tile := manzu [0, 0, 5, 6, 7, 7, 7]
 private def testHand1166678 : List Tile := manzu [0, 0, 5, 5, 5, 6, 7]
+private def testHandT018 : List Tile := manzu [1, 1, 1, 3, 3, 4, 5]
+private def testHandT026 : List Tile := manzu [1, 1, 1, 1, 2, 3, 3]
+
+private def nineGatesComponents : List WaitComponent :=
+  [{ kind := .toitsu, tiles := manzu [0, 0] },
+   { kind := .shuntsu, tiles := manzu [0, 1, 2] },
+   { kind := .shuntsu, tiles := manzu [3, 4, 5] },
+   { kind := .shuntsu, tiles := manzu [6, 7, 8] },
+   { kind := .toitsu, tiles := manzu [8, 8] }]
 
 private def isIrreducibleTenpai (tiles : List Tile) : Bool :=
   !(canReduceMentsuPreservingWaitCores tiles)
+
+example :
+  componentRelations nineGatesComponents =
+    [{ firstKind := .toitsu, secondKind := .toitsu,
+       tileRelation := .sameNumberedSuit 8 },
+     { firstKind := .toitsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 0 },
+     { firstKind := .toitsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 0 },
+     { firstKind := .toitsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 3 },
+     { firstKind := .toitsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 3 },
+     { firstKind := .toitsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 6 },
+     { firstKind := .toitsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 6 },
+     { firstKind := .shuntsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 1 },
+     { firstKind := .shuntsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 1 },
+     { firstKind := .shuntsu, secondKind := .shuntsu,
+       tileRelation := .sameNumberedSuit 4 }] ∧
+  componentRelation
+    { kind := .toitsu, tiles := manzu [0, 0] }
+    { kind := .shuntsu, tiles := Tile.numberedTiles .Pinzu [0, 1, 2] } =
+    { firstKind := .toitsu, secondKind := .shuntsu,
+      tileRelation := .differentNumberedSuits } ∧
+  componentRelation
+    { kind := .toitsu, tiles := manzu [0, 0] }
+    { kind := .toitsu, tiles := [.honor .East, .honor .East] } =
+    { firstKind := .toitsu, secondKind := .toitsu,
+      tileRelation := .numberedAndHonor } := by
+  native_decide
 
 example :
   waitCoreExtractions (findWaitCompletions testHand1234) =
@@ -58,6 +101,12 @@ example :
     findWaitDecompositionCodes testHand1166678 = [117, 117, 255, 255] ∧
     findWaitDecompositionCodes testHand1167888 =
       findWaitDecompositionCodes testHand1166678 ∧
+    findWaitDecompositionRelationClassification testHand1167888 !=
+      findWaitDecompositionRelationClassification testHand1166678 ∧
+    findWaitDecompositionCodes testHandT018 = [255, 255, 273, 442] ∧
+    findWaitDecompositionCodes testHandT018 = findWaitDecompositionCodes testHandT026 ∧
+    findWaitDecompositionRelationClassification testHandT018 !=
+      findWaitDecompositionRelationClassification testHandT026 ∧
     irreducibleSingleSuitSevenTileExamples.length = 53 ∧
     irreducibleSingleSuitSevenTileExamples.all
       (fun entry => isIrreducibleTenpai entry.2) = true ∧

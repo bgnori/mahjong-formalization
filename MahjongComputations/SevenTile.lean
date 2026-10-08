@@ -29,6 +29,7 @@ structure SevenTileSummary where
   waitCoreCacheMisses : Nat
   waitCoreCacheEntries : Nat
   irreducibleGroups : List WaitDecompositionCodeGroup
+  irreducibleRelationClassifications : List WaitDecompositionRelationClassification
   waitTileCountDistribution : List (Nat × Nat)
 deriving BEq, DecidableEq, Repr
 
@@ -42,6 +43,7 @@ private def emptySummary : SevenTileSummary :=
     waitCoreCacheMisses := 0
     waitCoreCacheEntries := 0
     irreducibleGroups := []
+    irreducibleRelationClassifications := []
     waitTileCountDistribution := [] }
 
 private def allSevenTileShapeCount (_ : Unit) : Nat :=
@@ -51,11 +53,18 @@ private structure ComputationState where
   summary : SevenTileSummary
   waitCoreCache : WaitCoreCache
 
+private def insertRelationClassification
+    (classification : WaitDecompositionRelationClassification)
+    (classifications : List WaitDecompositionRelationClassification) :
+    List WaitDecompositionRelationClassification :=
+  if classifications.contains classification then classifications else classification :: classifications
+
 private def addShapeReport (report : WaitCompletionGroup) (state : ComputationState) :
     ComputationState :=
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
+  let relationClassification := waitDecompositionRelationClassification completions
   let (reducible, waitCoreCache) :=
     canReduceMentsuPreservingWaitCoresCached report.tiles completions state.waitCoreCache
   let summary :=
@@ -68,7 +77,10 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   else
     { summary with
       irreducibleReports := summary.irreducibleReports + 1
-      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups }
+      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
+      irreducibleRelationClassifications :=
+        insertRelationClassification relationClassification
+          summary.irreducibleRelationClassifications }
   { summary, waitCoreCache }
 
 private def addShapeReportShared (cache : SharedWaitCoreCache)
@@ -76,6 +88,7 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
+  let relationClassification := waitDecompositionRelationClassification completions
   let reducible ← canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
   let summary :=
     { summary with
@@ -86,7 +99,10 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
   else
     return { summary with
       irreducibleReports := summary.irreducibleReports + 1
-      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups }
+      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
+      irreducibleRelationClassifications :=
+        insertRelationClassification relationClassification
+          summary.irreducibleRelationClassifications }
 
 private def addCodeGroup
     (groups : List WaitDecompositionCodeGroup) (addition : WaitDecompositionCodeGroup) :
@@ -115,6 +131,11 @@ private def mergeSummary (first second : SevenTileSummary) : SevenTileSummary :=
     reducibleReports := first.reducibleReports + second.reducibleReports
     irreducibleReports := first.irreducibleReports + second.irreducibleReports
     irreducibleGroups := second.irreducibleGroups.foldl addCodeGroup first.irreducibleGroups
+    irreducibleRelationClassifications :=
+      second.irreducibleRelationClassifications.foldl
+        (fun classifications classification =>
+          insertRelationClassification classification classifications)
+        first.irreducibleRelationClassifications
     waitTileCountDistribution :=
       second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
 

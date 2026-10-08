@@ -14,6 +14,11 @@ open MahjongComputations.SevenTile
 private def newline : String := "\n"
 
 private def reportBody (summary : SevenTileSummary) : String :=
+  let relationRefinementLines := summary.irreducibleGroups.map fun group =>
+    let refinedCount :=
+      (summary.irreducibleRelationClassifications.filter fun classification =>
+        classification.codes == group.codes).length
+    String.intercalate "\t" [toString group.codes, toString refinedCount]
   String.intercalate newline <|
     ["# Seven-tile direct derivation wait report",
      "",
@@ -37,6 +42,12 @@ private def reportBody (summary : SevenTileSummary) : String :=
     "waitDecompositionCodes\twaitDecompositionCodesKey\tcount\trepresentativeTiles\trepresentativeWaits"] ++
     summary.irreducibleGroups.map formatWaitDecompositionCodeGroup ++
     ["",
+     "#### Groups by waitDecompositionCodes and ComponentRelation",
+     s!"groupCount: {summary.irreducibleRelationClassifications.length}",
+     "waitDecompositionCodes\trefinedGroupCount"] ++
+    relationRefinementLines ++
+    ["",
+     "",
      "## Wait tile count distribution"] ++
     ((List.range Tile.count).map (fun index =>
       formatWaitTileCount summary.waitTileCountDistribution (index + 1))) ++

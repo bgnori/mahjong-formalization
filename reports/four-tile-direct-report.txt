@@ -30,6 +30,22 @@ waitDecompositionCodes	waitDecompositionCodesKey	count	representativeTiles	repre
 [26, 33]	22992	6	7789s	7s
 [26, 26]	19032	18	3456m	36m
 
+#### Groups by waitDecompositionCodes and ComponentRelation
+groupCount: 41
+waitDecompositionCodes	refinedGroupCount
+[9, 9]	11
+[33, 34]	1
+[15, 15]	7
+[21, 34]	1
+[15, 15, 34]	1
+[21]	8
+[33]	8
+[15, 15, 26]	1
+[21, 26]	1
+[26, 33]	1
+[26, 26]	1
+
+
 ## Wait tile count distribution
 1 wait tile kinds: 2511
 2 wait tile kinds: 1209

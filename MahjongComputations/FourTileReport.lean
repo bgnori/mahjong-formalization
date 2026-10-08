@@ -41,6 +41,15 @@ private def reportText
   let irreducibleReports := reportsByReducibility directReports .irreducible
   let irreducibleGroups := groupByWaitDecompositionCodes
     (·.waitDecompositionCodes) (·.tiles) (·.waits) irreducibleReports
+  let irreducibleRelationGroupCount :=
+    (irreducibleReports.map (·.relationClassification)).eraseDups.length
+  let relationRefinementLines := irreducibleGroups.map fun group =>
+    let refinedCount :=
+      (irreducibleReports
+        |>.filter (fun report => report.waitDecompositionCodes == group.codes)
+        |>.map (·.relationClassification)
+        |>.eraseDups).length
+    String.intercalate "\t" [toString group.codes, toString refinedCount]
   let waitTileCounts := countOccurrences (directReports.map (·.waits.length))
   String.intercalate newline <|
     ["# Four-tile direct derivation wait report",
@@ -65,6 +74,12 @@ private def reportText
     "waitDecompositionCodes\twaitDecompositionCodesKey\tcount\trepresentativeTiles\trepresentativeWaits"] ++
     irreducibleGroups.map formatWaitDecompositionCodeGroup ++
     ["",
+     "#### Groups by waitDecompositionCodes and ComponentRelation",
+     s!"groupCount: {irreducibleRelationGroupCount}",
+     "waitDecompositionCodes\trefinedGroupCount"] ++
+    relationRefinementLines ++
+    ["",
+     "",
      "## Wait tile count distribution"] ++
     ([1, 2, 3, 4].map (formatWaitTileCount waitTileCounts)) ++
     ["",

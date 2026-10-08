@@ -59,6 +59,45 @@ structure WaitDecomposition where
   components : List WaitComponent
 deriving BEq, DecidableEq, Repr
 
+/-- 2部品の具体牌の位置関係。数牌の距離は同一スート内でだけ定義する。 -/
+inductive ComponentTileRelation
+| sameNumberedSuit (distance : Nat)
+| differentNumberedSuits
+| numberedAndHonor
+| sameHonor
+| differentHonors
+| invalidComponents
+deriving BEq, DecidableEq, Repr
+
+/--
+2つの待ち分解部品の種別と具体牌の位置関係。
+
+部品の順序に依存しないよう、`firstKind` と `secondKind` は
+`WaitComponentKind.all` における順序で正規化する。
+-/
+structure ComponentRelation where
+  firstKind : WaitComponentKind
+  secondKind : WaitComponentKind
+  tileRelation : ComponentTileRelation
+deriving BEq, DecidableEq, Repr
+
+/--
+従来の素数積コードと、その積を構成した全部品間の位置関係をそのまま保持する実験的シグネチャ。
+
+`relations` は部品対の順序に依存しないよう正規化されている。位置関係をどのように
+`waitDecompositionCodes` へ組み込むかは決めず、分類実験で構造を直接比較できる形に留める。
+-/
+structure WaitDecompositionRelationSignature where
+  code : Nat
+  relations : List ComponentRelation
+deriving BEq, DecidableEq, Repr
+
+/-- 従来コード列と位置関係シグネチャ列を並置した実験的分類。 -/
+structure WaitDecompositionRelationClassification where
+  codes : List Nat
+  signatures : List WaitDecompositionRelationSignature
+deriving BEq, DecidableEq, Repr
+
 /-- 完成面子を除いた核成分列と、除去した面子を分けて保持する抽出結果。 -/
 structure WaitCoreExtraction where
   wait : Tile
@@ -177,6 +216,111 @@ private def canonicalizeWaitDecomposition
   (components : List WaitComponent) : List WaitComponent :=
   components.mergeSort fun first second =>
     concreteComponentKey first ≤ concreteComponentKey second
+
+private inductive ComponentTileClass
+| numbered (suit : Suit) (ranks : List Nat)
+| honor (honor : Honor)
+| invalid
+
+private def numberedRanksInSuit (expected : Suit) : List Tile → Option (List Nat)
+  | [] => some []
+  | .numbered suit rank :: rest =>
+      if suit == expected then
+        (numberedRanksInSuit expected rest).map (rank.val :: ·)
+      else
+        none
+  | .honor _ :: _ => none
+
+private def allSameHonor (expected : Honor) : List Tile → Bool
+  | [] => true
+  | .honor honor :: rest => honor == expected && allSameHonor expected rest
+  | .numbered _ _ :: _ => false
+
+private def componentTileClass : List Tile → ComponentTileClass
+  | [] => .invalid
+  | tiles@(.numbered suit _ :: _) =>
+      match numberedRanksInSuit suit tiles with
+      | some ranks => .numbered suit ranks
+      | none => .invalid
+  | tiles@(.honor honor :: _) =>
+      if allSameHonor honor tiles then .honor honor else .invalid
+
+private def rankDistance (first second : Nat) : Nat :=
+  if first ≤ second then second - first else first - second
+
+private def minimumDistanceFrom (first : Nat) : List Nat → Option Nat
+  | [] => none
+  | second :: rest =>
+      let distance := rankDistance first second
+      match minimumDistanceFrom first rest with
+      | none => some distance
+      | some remaining => some (Nat.min distance remaining)
+
+private def minimumRankDistance : List Nat → List Nat → Option Nat
+  | [], _ => none
+  | first :: rest, second =>
+      match minimumDistanceFrom first second, minimumRankDistance rest second with
+      | none, none => none
+      | some distance, none
+      | none, some distance => some distance
+      | some distance, some remaining => some (Nat.min distance remaining)
+
+private def componentTileRelation
+    (first second : WaitComponent) : ComponentTileRelation :=
+  match componentTileClass first.tiles, componentTileClass second.tiles with
+  | .numbered firstSuit firstRanks, .numbered secondSuit secondRanks =>
+      if firstSuit == secondSuit then
+        match minimumRankDistance firstRanks secondRanks with
+        | some distance => .sameNumberedSuit distance
+        | none => .invalidComponents
+      else
+        .differentNumberedSuits
+  | .numbered _ _, .honor _
+  | .honor _, .numbered _ _ => .numberedAndHonor
+  | .honor firstHonor, .honor secondHonor =>
+      if firstHonor == secondHonor then .sameHonor else .differentHonors
+  | _, _ => .invalidComponents
+
+private def componentRelationKey (relation : ComponentRelation) : Nat :=
+  let tileRelationKey := match relation.tileRelation with
+    | .sameNumberedSuit distance => distance
+    | .differentNumberedSuits => numberedRankCount
+    | .numberedAndHonor => numberedRankCount + 1
+    | .sameHonor => numberedRankCount + 2
+    | .differentHonors => numberedRankCount + 3
+    | .invalidComponents => numberedRankCount + 4
+  (waitComponentKey relation.firstKind * WaitComponentKind.count +
+      waitComponentKey relation.secondKind) *
+    (numberedRankCount + 5) + tileRelationKey
+
+/-- 2つの具体牌付き部品から、部品順に依存しない位置関係を作る。 -/
+def componentRelation (first second : WaitComponent) : ComponentRelation :=
+  if waitComponentKey first.kind ≤ waitComponentKey second.kind then
+    { firstKind := first.kind
+      secondKind := second.kind
+      tileRelation := componentTileRelation first second }
+  else
+    { firstKind := second.kind
+      secondKind := first.kind
+      tileRelation := componentTileRelation first second }
+
+/-- 具体牌付き部品列から、異なる2部品の全組合せに対する位置関係を正規化して列挙する。 -/
+def componentRelations : List WaitComponent → List ComponentRelation
+  | [] => []
+  | first :: rest =>
+      (rest.map (componentRelation first) ++ componentRelations rest)
+        |>.mergeSort fun left right => componentRelationKey left ≤ componentRelationKey right
+
+private def componentRelationsKey (relations : List ComponentRelation) : Nat :=
+  let base := WaitComponentKind.count * WaitComponentKind.count * (numberedRankCount + 5) + 1
+  relations.foldl (fun key relation => key * base + componentRelationKey relation + 1) 0
+
+private def relationSignatureLE
+    (first second : WaitDecompositionRelationSignature) : Bool :=
+  if first.code == second.code then
+    componentRelationsKey first.relations ≤ componentRelationsKey second.relations
+  else
+    first.code < second.code
 
 def waitDecompositionKey (decomposition : WaitDecomposition) : Nat :=
   decomposition.wait.orderKey * decompositionWaitKeyStride +
@@ -365,6 +509,40 @@ def waitDecompositionCodes (completions : List WaitCompletion) : List Nat :=
   waitDecompositionCodeEntries completions
     |>.map (fun entry => entry.code)
     |>.mergeSort fun first second => first ≤ second
+
+private structure WaitDecompositionRelationEntry where
+  wait : Tile
+  signature : WaitDecompositionRelationSignature
+deriving BEq, DecidableEq
+
+/--
+発見済みの待ち分解ごとに、従来コードと全部品対の具体的位置関係を対応付ける。
+
+同じ待ち牌についてコードと関係がともに同じ分解は重複除去する。一方、待ち牌が異なる場合は、
+`waitDecompositionCodes` と同様に待ち牌を忘れた後も出現回数を保持する。
+-/
+def waitDecompositionRelationSignatures
+    (completions : List WaitCompletion) : List WaitDecompositionRelationSignature :=
+  waitDecompositions completions
+    |>.map (fun decomposition =>
+      { wait := decomposition.wait
+        signature :=
+          { code := componentProduct (decomposition.components.map (·.kind))
+            relations := componentRelations decomposition.components } : WaitDecompositionRelationEntry })
+    |>.eraseDups
+    |>.map (·.signature)
+    |>.mergeSort relationSignatureLE
+
+/--
+従来のコード分類を維持したまま、具体的な部品間関係を付加した実験的分類を返す。
+
+`codes` と `signatures` は独立に正規化する。後者にも対応する従来コードを含めるため、
+同じコードが位置関係によって複数のシグネチャへ分かれた場合を観察できる。
+-/
+def waitDecompositionRelationClassification
+    (completions : List WaitCompletion) : WaitDecompositionRelationClassification :=
+  { codes := waitDecompositionCodes completions
+    signatures := waitDecompositionRelationSignatures completions }
 
 example : waitDecompositionCodes
     [{ wait := .numbered .Manzu 4
@@ -561,6 +739,11 @@ theorem reducibility_eq_irreducible_iff (tiles : List Tile)
 
 def findWaitDecompositionCodes (tiles : List Tile) : List Nat :=
   waitDecompositionCodes (WaitCompletionFinder.findWaitCompletions tiles)
+
+/-- 牌列から従来コードと部品間関係を併記した実験的分類を計算する。 -/
+def findWaitDecompositionRelationClassification
+    (tiles : List Tile) : WaitDecompositionRelationClassification :=
+  waitDecompositionRelationClassification (WaitCompletionFinder.findWaitCompletions tiles)
 
 /--
 数牌1スートの既約な7枚待ち53形。最小ランクが1になるよう正規化している。

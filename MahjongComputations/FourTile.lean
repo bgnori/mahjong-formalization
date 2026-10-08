@@ -23,6 +23,7 @@ structure FourTileShapeReport where
   waits : List Tile
   reducibility : Option WaitReducibility
   waitDecompositionCodes : List Nat
+  relationClassification : WaitDecompositionRelationClassification
 deriving BEq, DecidableEq, Repr
 
 /-- All legal four-tile shapes as sorted tile-type multisets. -/
@@ -34,7 +35,8 @@ def report (tiles : List Tile) : FourTileShapeReport :=
   { tiles
     waits := waitingTiles tiles
     reducibility := determineReducibility tiles
-    waitDecompositionCodes := findWaitDecompositionCodes tiles }
+    waitDecompositionCodes := findWaitDecompositionCodes tiles
+    relationClassification := findWaitDecompositionRelationClassification tiles }
 
 /-- Exhaustive four-tile tenpai reports. -/
 def tenpaiReports : List FourTileShapeReport :=
@@ -49,7 +51,8 @@ private def directReport (report : WaitCompletionGroup) : FourTileShapeReport :=
     waits := waitsFromCompletions completions
     reducibility := some (if canReduceMentsuPreservingWaitCoresGivenCompletions report.tiles completions
       then .reducible else .irreducible)
-    waitDecompositionCodes := waitDecompositionCodes completions }
+    waitDecompositionCodes := waitDecompositionCodes completions
+    relationClassification := waitDecompositionRelationClassification completions }
 
 /-- Four-tile direct reports computed with one cache shared by all shapes. -/
 def directDerivationReportsWithCache :
@@ -64,7 +67,8 @@ def directDerivationReportsWithCache :
         { tiles := report.tiles
           waits := waitsFromCompletions completions
           reducibility := some (if reducible then .reducible else .irreducible)
-          waitDecompositionCodes := waitDecompositionCodes completions }
+          waitDecompositionCodes := waitDecompositionCodes completions
+          relationClassification := waitDecompositionRelationClassification completions }
       (result :: reports, cache))
     ([], MahjongComputations.emptyWaitCoreCache)
   (reports.reverse, cache)
@@ -81,7 +85,8 @@ def directDerivationReportsParallel (workers : Nat) :
         { tiles := report.tiles
           waits := waitsFromCompletions completions
           reducibility := some (if reducible then .reducible else .irreducible)
-          waitDecompositionCodes := waitDecompositionCodes completions }
+          waitDecompositionCodes := waitDecompositionCodes completions
+          relationClassification := waitDecompositionRelationClassification completions }
       return result :: results
     return reversed.reverse
   let stats ← cache.stats
