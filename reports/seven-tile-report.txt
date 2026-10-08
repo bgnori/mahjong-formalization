@@ -69,20 +69,20 @@ waitDecompositionCodes	waitDecompositionCodesKey	count	representativeTiles	repre
 [357, 429, 442]	99858670	6	1111223p	23p
 
 #### Groups by waitDecompositionCodes and ComponentRelation
-groupCount: 106
+groupCount: 57
 waitDecompositionCodes	refinedGroupCount
 [255, 255, 273, 442]	2
 [195, 195, 273, 338]	2
-[273, 429]	8
-[195, 195, 273]	11
-[117, 117, 561]	8
+[273, 429]	1
+[195, 195, 273]	1
+[117, 117, 561]	1
 [117, 117, 255, 255, 255, 255, 578]	1
 [195, 195, 357, 442]	1
-[117, 117, 255, 255]	12
+[117, 117, 255, 255]	1
 [195, 195, 273, 442, 442]	1
-[117, 117, 357]	8
-[195, 195, 429]	5
-[195, 195, 195]	4
+[117, 117, 357]	1
+[195, 195, 429]	1
+[195, 195, 195]	1
 [255, 255]	1
 [195, 195, 338, 338]	2
 [255, 255, 429, 442]	1
@@ -158,4 +158,4 @@ waitDecompositionCodes	refinedGroupCount
 33 wait tile kinds: 0
 34 wait tile kinds: 0
 
-calculationElapsedMs: 2123
+calculationElapsedMs: 2205

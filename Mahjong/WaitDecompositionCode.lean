@@ -59,13 +59,10 @@ structure WaitDecomposition where
   components : List WaitComponent
 deriving BEq, DecidableEq, Repr
 
-/-- 2部品の具体牌の位置関係。数牌の距離は同一スート内でだけ定義する。 -/
+/-- 2部品が同じ牌種を共有するか。距離やスート名は保持しない。 -/
 inductive ComponentTileRelation
-| sameNumberedSuit (distance : Nat)
-| differentNumberedSuits
-| numberedAndHonor
-| sameHonor
-| differentHonors
+| overlapping
+| disjoint
 | invalidComponents
 deriving BEq, DecidableEq, Repr
 
@@ -217,81 +214,23 @@ private def canonicalizeWaitDecomposition
   components.mergeSort fun first second =>
     concreteComponentKey first ≤ concreteComponentKey second
 
-private inductive ComponentTileClass
-| numbered (suit : Suit) (ranks : List Nat)
-| honor (honor : Honor)
-| invalid
-
-private def numberedRanksInSuit (expected : Suit) : List Tile → Option (List Nat)
-  | [] => some []
-  | .numbered suit rank :: rest =>
-      if suit == expected then
-        (numberedRanksInSuit expected rest).map (rank.val :: ·)
-      else
-        none
-  | .honor _ :: _ => none
-
-private def allSameHonor (expected : Honor) : List Tile → Bool
-  | [] => true
-  | .honor honor :: rest => honor == expected && allSameHonor expected rest
-  | .numbered _ _ :: _ => false
-
-private def componentTileClass : List Tile → ComponentTileClass
-  | [] => .invalid
-  | tiles@(.numbered suit _ :: _) =>
-      match numberedRanksInSuit suit tiles with
-      | some ranks => .numbered suit ranks
-      | none => .invalid
-  | tiles@(.honor honor :: _) =>
-      if allSameHonor honor tiles then .honor honor else .invalid
-
-private def rankDistance (first second : Nat) : Nat :=
-  if first ≤ second then second - first else first - second
-
-private def minimumDistanceFrom (first : Nat) : List Nat → Option Nat
-  | [] => none
-  | second :: rest =>
-      let distance := rankDistance first second
-      match minimumDistanceFrom first rest with
-      | none => some distance
-      | some remaining => some (Nat.min distance remaining)
-
-private def minimumRankDistance : List Nat → List Nat → Option Nat
-  | [], _ => none
-  | first :: rest, second =>
-      match minimumDistanceFrom first second, minimumRankDistance rest second with
-      | none, none => none
-      | some distance, none
-      | none, some distance => some distance
-      | some distance, some remaining => some (Nat.min distance remaining)
-
 private def componentTileRelation
     (first second : WaitComponent) : ComponentTileRelation :=
-  match componentTileClass first.tiles, componentTileClass second.tiles with
-  | .numbered firstSuit firstRanks, .numbered secondSuit secondRanks =>
-      if firstSuit == secondSuit then
-        match minimumRankDistance firstRanks secondRanks with
-        | some distance => .sameNumberedSuit distance
-        | none => .invalidComponents
-      else
-        .differentNumberedSuits
-  | .numbered _ _, .honor _
-  | .honor _, .numbered _ _ => .numberedAndHonor
-  | .honor firstHonor, .honor secondHonor =>
-      if firstHonor == secondHonor then .sameHonor else .differentHonors
-  | _, _ => .invalidComponents
+  if first.tiles.isEmpty || second.tiles.isEmpty then
+    .invalidComponents
+  else if first.tiles.any second.tiles.contains then
+    .overlapping
+  else
+    .disjoint
 
 private def componentRelationKey (relation : ComponentRelation) : Nat :=
   let tileRelationKey := match relation.tileRelation with
-    | .sameNumberedSuit distance => distance
-    | .differentNumberedSuits => numberedRankCount
-    | .numberedAndHonor => numberedRankCount + 1
-    | .sameHonor => numberedRankCount + 2
-    | .differentHonors => numberedRankCount + 3
-    | .invalidComponents => numberedRankCount + 4
+    | .overlapping => 0
+    | .disjoint => 1
+    | .invalidComponents => 2
   (waitComponentKey relation.firstKind * WaitComponentKind.count +
       waitComponentKey relation.secondKind) *
-    (numberedRankCount + 5) + tileRelationKey
+    3 + tileRelationKey
 
 /-- 2つの具体牌付き部品から、部品順に依存しない位置関係を作る。 -/
 def componentRelation (first second : WaitComponent) : ComponentRelation :=
@@ -312,7 +251,7 @@ def componentRelations : List WaitComponent → List ComponentRelation
         |>.mergeSort fun left right => componentRelationKey left ≤ componentRelationKey right
 
 private def componentRelationsKey (relations : List ComponentRelation) : Nat :=
-  let base := WaitComponentKind.count * WaitComponentKind.count * (numberedRankCount + 5) + 1
+  let base := WaitComponentKind.count * WaitComponentKind.count * 3 + 1
   relations.foldl (fun key relation => key * base + componentRelationKey relation + 1) 0
 
 private def relationSignatureLE

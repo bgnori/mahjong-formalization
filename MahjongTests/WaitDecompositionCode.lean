@@ -13,6 +13,8 @@ private def testHand1167888 : List Tile := manzu [0, 0, 5, 6, 7, 7, 7]
 private def testHand1166678 : List Tile := manzu [0, 0, 5, 5, 5, 6, 7]
 private def testHandT018 : List Tile := manzu [1, 1, 1, 3, 3, 4, 5]
 private def testHandT026 : List Tile := manzu [1, 1, 1, 1, 2, 3, 3]
+private def testHand1188 : List Tile := manzu [0, 0, 7, 7]
+private def testHand1199 : List Tile := manzu [0, 0, 8, 8]
 
 private def nineGatesComponents : List WaitComponent :=
   [{ kind := .toitsu, tiles := manzu [0, 0] },
@@ -27,35 +29,35 @@ private def isIrreducibleTenpai (tiles : List Tile) : Bool :=
 example :
   componentRelations nineGatesComponents =
     [{ firstKind := .toitsu, secondKind := .toitsu,
-       tileRelation := .sameNumberedSuit 8 },
+       tileRelation := .disjoint },
      { firstKind := .toitsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 0 },
+       tileRelation := .overlapping },
      { firstKind := .toitsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 0 },
+       tileRelation := .overlapping },
      { firstKind := .toitsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 3 },
+       tileRelation := .disjoint },
      { firstKind := .toitsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 3 },
+       tileRelation := .disjoint },
      { firstKind := .toitsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 6 },
+       tileRelation := .disjoint },
      { firstKind := .toitsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 6 },
+       tileRelation := .disjoint },
      { firstKind := .shuntsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 1 },
+       tileRelation := .disjoint },
      { firstKind := .shuntsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 1 },
+       tileRelation := .disjoint },
      { firstKind := .shuntsu, secondKind := .shuntsu,
-       tileRelation := .sameNumberedSuit 4 }] ∧
+       tileRelation := .disjoint }] ∧
   componentRelation
     { kind := .toitsu, tiles := manzu [0, 0] }
     { kind := .shuntsu, tiles := Tile.numberedTiles .Pinzu [0, 1, 2] } =
     { firstKind := .toitsu, secondKind := .shuntsu,
-      tileRelation := .differentNumberedSuits } ∧
+      tileRelation := .disjoint } ∧
   componentRelation
     { kind := .toitsu, tiles := manzu [0, 0] }
     { kind := .toitsu, tiles := [.honor .East, .honor .East] } =
     { firstKind := .toitsu, secondKind := .toitsu,
-      tileRelation := .numberedAndHonor } := by
+      tileRelation := .disjoint } := by
   native_decide
 
 example :
@@ -101,8 +103,10 @@ example :
     findWaitDecompositionCodes testHand1166678 = [117, 117, 255, 255] ∧
     findWaitDecompositionCodes testHand1167888 =
       findWaitDecompositionCodes testHand1166678 ∧
-    findWaitDecompositionRelationClassification testHand1167888 !=
+    findWaitDecompositionRelationClassification testHand1167888 =
       findWaitDecompositionRelationClassification testHand1166678 ∧
+    findWaitDecompositionRelationClassification testHand1188 =
+      findWaitDecompositionRelationClassification testHand1199 ∧
     findWaitDecompositionCodes testHandT018 = [255, 255, 273, 442] ∧
     findWaitDecompositionCodes testHandT018 = findWaitDecompositionCodes testHandT026 ∧
     findWaitDecompositionRelationClassification testHandT018 !=
