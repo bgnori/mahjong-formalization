@@ -14,6 +14,11 @@
 - [domain-vocabulary.md](domain-vocabulary.md): 麻雀待ち分類のプロジェクト語彙を集約する。
 - [obsolete-vocabulary.md](obsolete-vocabulary.md): コードから削除した概念・用語・APIと、置き換え先または削除理由を記録する。
 - [review-backlog.md](review-backlog.md): 説明中に見つかった設計・命名の検討事項を分離する。
+- 運用方針文書: 現在採用している開発・計算環境の構成、手順、完了条件を記録する。
+- 日付付きRationale文書: 基盤や設計を選んだ時点の背景、比較対象、判断理由、見直し条件を記録する。
+
+運用方針は試行結果に応じて更新する。一方、日付付きRationaleは当時の判断を後から参照するための
+記録なので、新しい判断で内容を上書きせず、後続のRationaleから参照する。
 
 ## 読者向け成果物の原則
 

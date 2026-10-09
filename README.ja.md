@@ -153,6 +153,9 @@ PYTHONPATH=examples python3 -m unittest discover -s examples -p 'test_*.py'
 - [docs/proof-comment-policy.md](docs/proof-comment-policy.md): 定義・定理コメントに書くことと、語彙ページへ逃がすことの切り分け。
 - [docs/review-backlog.md](docs/review-backlog.md): ドキュメント整備後に検討する設計・命名課題。
 - [docs/wait-decomposition-classification-key-2026-09-13.md](docs/wait-decomposition-classification-key-2026-09-13.md): 待ち分解分類を64 bitキーへ収める設計。
+- [docs/remote-compute-gcp-batch.md](docs/remote-compute-gcp-batch.md): GCP Batch + Spot VMによるリモート計算の現行方針。
+- [docs/remote-compute-platform-rationale-2026-10-09.md](docs/remote-compute-platform-rationale-2026-10-09.md):
+  リモート計算基盤としてGCP Batch + Spot VMの試行を選んだ経緯と見直し条件。
 
 麻雀モジュール単位の概要は [Mahjong/README.md](Mahjong/README.md) を参照してください。
 

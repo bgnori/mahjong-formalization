@@ -155,6 +155,9 @@ Writer and maintenance notes:
 - [docs/proof-comment-policy.md](docs/proof-comment-policy.md): division of responsibility between source comments and guides.
 - [docs/review-backlog.md](docs/review-backlog.md): design and naming questions discovered during documentation.
 - [docs/wait-decomposition-classification-key-2026-09-13.md](docs/wait-decomposition-classification-key-2026-09-13.md): Japanese design note for fitting wait-decomposition classifications into 64-bit keys.
+- [docs/remote-compute-gcp-batch.md](docs/remote-compute-gcp-batch.md): Japanese operating plan for remote computation with GCP Batch and Spot VMs.
+- [docs/remote-compute-platform-rationale-2026-10-09.md](docs/remote-compute-platform-rationale-2026-10-09.md):
+  Japanese rationale for trialing GCP Batch and Spot VMs, including alternatives and review triggers.
 - [Mahjong/README.md](Mahjong/README.md): module-level overview.
 
 ## Origin
