@@ -3,6 +3,7 @@ import Mahjong.WaitDecompositionCode
 import MahjongComputations.Common
 import MahjongComputations.Parallel
 import MahjongComputations.ExternalWaitCompletion
+import MahjongComputations.BucketClassification
 
 /-!
 # Thirteen-tile wait computation from direct derivations
@@ -48,53 +49,6 @@ private def emptySummary : ThirteenTileSummary :=
 
 private def allThirteenTileShapeCount : Nat := 98521596000
 
-private def addShapeReportShared (cache : SharedWaitCoreCache)
-    (summary : ThirteenTileSummary) (report : WaitCompletionGroup) : IO ThirteenTileSummary := do
-  let completions := report.completions
-  let waits := waitsFromCompletions completions
-  let codes := waitDecompositionCodes completions
-  let reducible ← liftM <| canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
-  let summary :=
-    { summary with
-      tenpaiReports := summary.tenpaiReports + 1
-      waitTileCountDistribution := incrementCount waits.length summary.waitTileCountDistribution }
-  if reducible then
-    return { summary with reducibleReports := summary.reducibleReports + 1 }
-  else
-    return { summary with
-      irreducibleReports := summary.irreducibleReports + 1
-      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups }
-
-private def addCodeGroup
-    (groups : List WaitDecompositionCodeGroup) (addition : WaitDecompositionCodeGroup) :
-    List WaitDecompositionCodeGroup :=
-  match groups with
-  | [] => [addition]
-  | group :: rest =>
-      if group.codes == addition.codes then
-        { group with count := group.count + addition.count } :: rest
-      else
-        group :: addCodeGroup rest addition
-
-private def addDistribution
-    (counts : List (Nat × Nat)) (addition : Nat × Nat) : List (Nat × Nat) :=
-  match counts with
-  | [] => [addition]
-  | count :: rest =>
-      if count.1 == addition.1 then
-        (count.1, count.2 + addition.2) :: rest
-      else
-        count :: addDistribution rest addition
-
-private def mergeSummary (first second : ThirteenTileSummary) : ThirteenTileSummary :=
-  { first with
-    tenpaiReports := first.tenpaiReports + second.tenpaiReports
-    reducibleReports := first.reducibleReports + second.reducibleReports
-    irreducibleReports := first.irreducibleReports + second.irreducibleReports
-    irreducibleGroups := second.irreducibleGroups.foldl addCodeGroup first.irreducibleGroups
-    waitTileCountDistribution :=
-      second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
-
 /-- Summary plus whether generation reused a completed external bucket set. -/
 structure ThirteenTileRunResult where
   summary : ThirteenTileSummary
@@ -107,6 +61,7 @@ private def generateBuckets (workers : Nat) (workDirectory : System.FilePath)
     IO.eprintln s!"thirteen-tile: reusing {derivationCount} generated derivations"
     return (ExternalWaitCompletion.bucketPaths workDirectory bucketCount, derivationCount, true)
   ExternalWaitCompletion.clearGenerationCheckpoint workDirectory
+  BucketClassification.clearResults (ExternalWaitCompletion.bucketPaths workDirectory bucketCount)
   IO.eprintln s!"thirteen-tile: opening {bucketCount} buckets with {workers} generation workers"
   let generation ← ExternalWaitCompletion.withBucketSet workDirectory 4 bucketCount
     (action := fun buckets => do
@@ -131,20 +86,20 @@ def summaryParallel (generationWorkers classificationWorkers : Nat)
     generateBuckets generationWorkers workDirectory bucketCount
   IO.eprintln s!"thirteen-tile: classifying {paths.length} buckets with {classificationWorkers} workers"
   let cache ← SharedWaitCoreCache.new
-  let partials ← parallelMapChunksIO classificationWorkers paths fun workerPaths =>
-    workerPaths.foldlM (init := emptySummary) fun summary path => do
-      IO.eprintln s!"thirteen-tile: classifying {path}"
-      let groups ← ExternalWaitCompletion.readGroups path 4
-      groups.foldlM (addShapeReportShared cache) summary
-  let computed := partials.foldl mergeSummary emptySummary
+  let computed ← BucketClassification.classifyBuckets classificationWorkers 4 cache paths
   let stats ← liftM cache.stats
   return {
-    summary := { computed with
+    summary := { emptySummary with
       allThirteenTileShapes := allThirteenTileShapeCount
       enumeratedDerivations
+      tenpaiReports := computed.tenpaiReports
+      reducibleReports := computed.reducibleReports
+      irreducibleReports := computed.irreducibleReports
       waitCoreCacheHits := stats.hits
       waitCoreCacheMisses := stats.misses
-      waitCoreCacheEntries := stats.entries }
+      waitCoreCacheEntries := stats.entries
+      irreducibleGroups := computed.irreducibleGroups
+      waitTileCountDistribution := computed.waitTileCountDistribution }
     generationReused
   }
 

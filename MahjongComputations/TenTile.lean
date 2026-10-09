@@ -3,6 +3,7 @@ import Mahjong.WaitDecompositionCode
 import MahjongComputations.Common
 import MahjongComputations.Parallel
 import MahjongComputations.ExternalWaitCompletion
+import MahjongComputations.BucketClassification
 
 /-!
 # Ten-tile wait computation from direct derivations
@@ -48,56 +49,14 @@ private def emptySummary : TenTileSummary :=
 
 private def allTenTileShapeCount : Nat := 1900269316
 
-private def addShapeReportShared (cache : SharedWaitCoreCache)
-    (summary : TenTileSummary) (report : WaitCompletionGroup) : IO TenTileSummary := do
-  let completions := report.completions
-  let waits := waitsFromCompletions completions
-  let codes := waitDecompositionCodes completions
-  let reducible ← liftM <| canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
-  let summary :=
-    { summary with
-      tenpaiReports := summary.tenpaiReports + 1
-      waitTileCountDistribution := incrementCount waits.length summary.waitTileCountDistribution }
-  if reducible then
-    return { summary with reducibleReports := summary.reducibleReports + 1 }
-  else
-    return { summary with
-      irreducibleReports := summary.irreducibleReports + 1
-      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups }
-
-private def addCodeGroup
-    (groups : List WaitDecompositionCodeGroup) (addition : WaitDecompositionCodeGroup) :
-    List WaitDecompositionCodeGroup :=
-  match groups with
-  | [] => [addition]
-  | group :: rest =>
-      if group.codes == addition.codes then
-        { group with count := group.count + addition.count } :: rest
-      else
-        group :: addCodeGroup rest addition
-
-private def addDistribution
-    (counts : List (Nat × Nat)) (addition : Nat × Nat) : List (Nat × Nat) :=
-  match counts with
-  | [] => [addition]
-  | count :: rest =>
-      if count.1 == addition.1 then
-        (count.1, count.2 + addition.2) :: rest
-      else
-        count :: addDistribution rest addition
-
-private def mergeSummary (first second : TenTileSummary) : TenTileSummary :=
-  { first with
-    tenpaiReports := first.tenpaiReports + second.tenpaiReports
-    reducibleReports := first.reducibleReports + second.reducibleReports
-    irreducibleReports := first.irreducibleReports + second.irreducibleReports
-    irreducibleGroups := second.irreducibleGroups.foldl addCodeGroup first.irreducibleGroups
-    waitTileCountDistribution :=
-      second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
-
-/-- Generate and classify ten-tile derivations through bounded external hash buckets. -/
-def summaryParallel (workers : Nat) (workDirectory : System.FilePath)
-    (bucketCount : Nat := 64) : IO TenTileSummary := do
+private def generateBuckets (workers : Nat) (workDirectory : System.FilePath)
+    (bucketCount : Nat) : IO (List System.FilePath × Nat) := do
+  if let some derivationCount ←
+      ExternalWaitCompletion.readGenerationCheckpoint workDirectory 3 bucketCount then
+    IO.eprintln s!"ten-tile: reusing {derivationCount} generated derivations"
+    return (ExternalWaitCompletion.bucketPaths workDirectory bucketCount, derivationCount)
+  ExternalWaitCompletion.clearGenerationCheckpoint workDirectory
+  BucketClassification.clearResults (ExternalWaitCompletion.bucketPaths workDirectory bucketCount)
   IO.eprintln s!"ten-tile: opening {bucketCount} buckets with {workers} workers"
   let generation ← ExternalWaitCompletion.withBucketSet workDirectory 3 bucketCount
     (action := fun buckets => do
@@ -110,20 +69,28 @@ def summaryParallel (workers : Nat) (workDirectory : System.FilePath)
               completion := DirectWaitGeneration.completion derivation }
             pure (count + 1)
       return (buckets.paths, counts.sum))
-  let (paths, enumeratedDerivations) := generation
+  let (paths, derivationCount) := generation
+  ExternalWaitCompletion.writeGenerationCheckpoint workDirectory 3 bucketCount derivationCount
+  return (paths, derivationCount)
+
+/-- Generate and classify ten-tile derivations through bounded external hash buckets. -/
+def summaryParallel (workers : Nat) (workDirectory : System.FilePath)
+    (bucketCount : Nat := 64) : IO TenTileSummary := do
+  let (paths, enumeratedDerivations) ← generateBuckets workers workDirectory bucketCount
   IO.eprintln s!"ten-tile: generated {enumeratedDerivations} derivations; classifying buckets"
   let cache ← SharedWaitCoreCache.new
-  let partials ← parallelMapChunksIO workers paths fun workerPaths =>
-    workerPaths.foldlM (init := emptySummary) fun summary path => do
-      let groups ← ExternalWaitCompletion.readGroups path 3
-      groups.foldlM (addShapeReportShared cache) summary
-  let computed := partials.foldl mergeSummary emptySummary
+  let computed ← BucketClassification.classifyBuckets workers 3 cache paths
   let stats ← liftM cache.stats
-  return { computed with
+  return { emptySummary with
     allTenTileShapes := allTenTileShapeCount
     enumeratedDerivations
+    tenpaiReports := computed.tenpaiReports
+    reducibleReports := computed.reducibleReports
+    irreducibleReports := computed.irreducibleReports
     waitCoreCacheHits := stats.hits
     waitCoreCacheMisses := stats.misses
-    waitCoreCacheEntries := stats.entries }
+    waitCoreCacheEntries := stats.entries
+    irreducibleGroups := computed.irreducibleGroups
+    waitTileCountDistribution := computed.waitTileCountDistribution }
 
 end MahjongComputations.TenTile
