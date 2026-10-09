@@ -14,16 +14,55 @@ import sys
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT_NAME = "four-tile-direct-report.txt"
 DEFAULT_REGION = "us-central1"
 MAX_RETRIES = 3
 MAX_RUNTIME_SECONDS = 7200
+
+
+@dataclass(frozen=True)
+class JobType:
+    """Per-report compute shape, executable, and output name."""
+
+    name: str
+    executable: str
+    report_name: str
+    machine_type: str
+    vcpu: int
+    memory_mib: int
+    task_memory_mib: int
+    default_workers: int
+    boot_disk_gb: int = 40
+
+
+JOB_TYPES: dict[str, JobType] = {
+    "four-tile": JobType(
+        name="four-tile",
+        executable="four-tile-report-gen",
+        report_name="four-tile-direct-report.txt",
+        machine_type="e2-standard-2",
+        vcpu=2,
+        memory_mib=8192,
+        task_memory_mib=6144,
+        default_workers=2,
+    ),
+    "seven-tile": JobType(
+        name="seven-tile",
+        executable="seven-tile-report-gen",
+        report_name="seven-tile-report.txt",
+        machine_type="e2-standard-8",
+        vcpu=8,
+        memory_mib=32768,
+        task_memory_mib=28672,
+        default_workers=8,
+    ),
+}
 
 
 class RemoteComputeError(RuntimeError):
@@ -134,6 +173,7 @@ def build_job_spec(
     image_uri: str,
     git_commit: str,
     output_uri: str,
+    job_type: JobType,
     workers: int,
 ) -> dict[str, Any]:
     return {
@@ -150,7 +190,7 @@ def build_job_spec(
                                 "commands": [
                                     "/opt/mahjong/scripts/remote_compute.py",
                                     "worker",
-                                    "four-tile",
+                                    job_type.name,
                                     output_uri,
                                     job_id,
                                     git_commit,
@@ -162,16 +202,16 @@ def build_job_spec(
                                 "variables": {
                                     "GCP_PROJECT": project,
                                     "GCP_REGION": region,
-                                    "BATCH_MACHINE_TYPE": "e2-standard-2",
-                                    "BATCH_VCPU": "2",
-                                    "BATCH_MEMORY_MIB": "8192",
+                                    "BATCH_MACHINE_TYPE": job_type.machine_type,
+                                    "BATCH_VCPU": str(job_type.vcpu),
+                                    "BATCH_MEMORY_MIB": str(job_type.memory_mib),
                                 }
                             },
                         }
                     ],
                     "computeResource": {
-                        "cpuMilli": 2000,
-                        "memoryMib": 6144,
+                        "cpuMilli": job_type.vcpu * 1000,
+                        "memoryMib": job_type.task_memory_mib,
                     },
                     "maxRetryCount": MAX_RETRIES,
                     "maxRunDuration": f"{MAX_RUNTIME_SECONDS}s",
@@ -182,9 +222,12 @@ def build_job_spec(
             "instances": [
                 {
                     "policy": {
-                        "machineType": "e2-standard-2",
+                        "machineType": job_type.machine_type,
                         "provisioningModel": "SPOT",
-                        "bootDisk": {"type": "pd-balanced", "sizeGb": 40},
+                        "bootDisk": {
+                            "type": "pd-balanced",
+                            "sizeGb": job_type.boot_disk_gb,
+                        },
                     }
                 }
             ],
@@ -193,7 +236,7 @@ def build_job_spec(
         "logsPolicy": {"destination": "CLOUD_LOGGING"},
         "labels": {
             "app": "mahjong-compute",
-            "job-type": "four-tile",
+            "job-type": job_type.name,
             "git-commit": git_commit[:12],
         },
     }
@@ -233,10 +276,10 @@ def get_project() -> str:
     return "" if value == "(unset)" else value
 
 
-def new_job_id(commit: str) -> str:
+def new_job_id(job_type: JobType, commit: str) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     suffix = uuid.uuid4().hex[:6]
-    return f"mahjong-four-tile-{commit[:8]}-{timestamp}-{suffix}"
+    return f"mahjong-{job_type.name}-{commit[:8]}-{timestamp}-{suffix}"
 
 
 def batch_job_json(
@@ -274,16 +317,23 @@ def submit(args: argparse.Namespace) -> int:
     repository = required_setting("GCP_ARTIFACT_REPOSITORY")
     bucket = normalized_bucket(required_setting("GCP_BUCKET"))
     service_account = required_setting("GCP_BATCH_SERVICE_ACCOUNT")
+    job_type = JOB_TYPES[args.job_type]
+    workers = args.workers if args.workers is not None else job_type.default_workers
+    if workers < 1:
+        raise RemoteComputeError("--workers must be a positive integer.")
     commit = verify_clean_checkout()
-    job_id = new_job_id(commit)
+    job_id = new_job_id(job_type, commit)
     image = (
         f"{region}-docker.pkg.dev/{project}/{repository}/mahjong-compute:{commit}"
     )
     print(
         "GCP Batch job configuration:\n"
         f"  job: {job_id}\n"
+        f"  job type: {job_type.name}\n"
         f"  region: {region}\n"
-        "  machine: e2-standard-2 (2 vCPU, 8 GiB)\n"
+        f"  machine: {job_type.machine_type} "
+        f"({job_type.vcpu} vCPU, {job_type.memory_mib // 1024} GiB)\n"
+        f"  workers: {workers}\n"
         "  provisioning: Spot only\n"
         f"  maximum retries: {MAX_RETRIES}\n"
         f"  maximum runtime: {MAX_RUNTIME_SECONDS // 60} minutes\n"
@@ -300,7 +350,8 @@ def submit(args: argparse.Namespace) -> int:
         image_uri=immutable_image,
         git_commit=commit,
         output_uri=output_uri(bucket, job_id),
-        workers=args.workers,
+        job_type=job_type,
+        workers=workers,
     )
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", suffix=".json"
@@ -345,7 +396,34 @@ def submit(args: argparse.Namespace) -> int:
 
 
 def download_report(bucket: str, job_id: str, output: str | None) -> int:
-    destination = Path(output) if output else ROOT / "reports" / f"four-tile-batch-{job_id}.txt"
+    metadata_result = run_command(
+        [
+            "gcloud",
+            "storage",
+            "cat",
+            f"{output_uri(bucket, job_id)}/metadata.json",
+        ],
+        capture_output=True,
+    )
+    metadata = json.loads(metadata_result.stdout)
+    report_metadata = metadata.get("report", {})
+    expected_checksum = report_metadata.get("sha256")
+    if metadata.get("status") != "SUCCEEDED" or not expected_checksum:
+        raise RemoteComputeError(
+            f"Job {job_id} does not have a verified successful report."
+        )
+    job_type_name = metadata.get("job_type")
+    if job_type_name not in JOB_TYPES:
+        raise RemoteComputeError(
+            f"Job {job_id} records an unknown job type: {job_type_name}"
+        )
+    report_name = JOB_TYPES[job_type_name].report_name
+
+    destination = (
+        Path(output)
+        if output
+        else ROOT / "reports" / f"{job_type_name}-batch-{job_id}.txt"
+    )
     if not destination.is_absolute():
         destination = ROOT / destination
     if destination.exists():
@@ -367,32 +445,16 @@ def download_report(bucket: str, job_id: str, output: str | None) -> int:
             f"Refusing to overwrite tracked file: {destination}"
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
-    metadata_result = run_command(
-        [
-            "gcloud",
-            "storage",
-            "cat",
-            f"{output_uri(bucket, job_id)}/metadata.json",
-        ],
-        capture_output=True,
-    )
-    metadata = json.loads(metadata_result.stdout)
-    report_metadata = metadata.get("report", {})
-    expected_checksum = report_metadata.get("sha256")
-    if metadata.get("status") != "SUCCEEDED" or not expected_checksum:
-        raise RemoteComputeError(
-            f"Job {job_id} does not have a verified successful report."
-        )
     with tempfile.TemporaryDirectory(
         prefix=".remote-compute-", dir=destination.parent
     ) as temp:
-        temporary_report = Path(temp) / REPORT_NAME
+        temporary_report = Path(temp) / report_name
         run_command(
             [
                 "gcloud",
                 "storage",
                 "cp",
-                f"{output_uri(bucket, job_id)}/results/{REPORT_NAME}",
+                f"{output_uri(bucket, job_id)}/results/{report_name}",
                 str(temporary_report),
             ]
         )
@@ -446,6 +508,8 @@ def run_worker(args: argparse.Namespace) -> int:
 
     bucket_name, prefix = parse_gs_uri(args.output_uri)
     project = required_setting("GCP_PROJECT")
+    job_type = JOB_TYPES[args.job_type]
+    report_name = job_type.report_name
     client = storage.Client(project=project)
     bucket = client.bucket(bucket_name)
     started = utc_now()
@@ -454,7 +518,7 @@ def run_worker(args: argparse.Namespace) -> int:
     upload_errors: list[str] = []
     metadata: dict[str, Any] = {
         "job_id": args.job_id,
-        "job_type": "four-tile",
+        "job_type": job_type.name,
         "git_commit": args.git_commit,
         "container_image": args.image,
         "region": os.environ.get("GCP_REGION"),
@@ -468,7 +532,7 @@ def run_worker(args: argparse.Namespace) -> int:
     }
     request = {
         "job_id": args.job_id,
-        "job_type": "four-tile",
+        "job_type": job_type.name,
         "git_commit": args.git_commit,
         "container_image": args.image,
         "region": os.environ.get("GCP_REGION"),
@@ -489,14 +553,14 @@ def run_worker(args: argparse.Namespace) -> int:
     request_path.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="mahjong-batch-") as temp:
         temp_dir = Path(temp)
-        report = temp_dir / REPORT_NAME
+        report = temp_dir / report_name
         time_log = temp_dir / "time-v.txt"
         command = [
             "/usr/bin/time",
             "-v",
             "-o",
             str(time_log),
-            str(ROOT / ".lake" / "build" / "bin" / "four-tile-report-gen"),
+            str(ROOT / ".lake" / "build" / "bin" / job_type.executable),
             f"--workers={args.workers}",
             str(report),
         ]
@@ -526,13 +590,13 @@ def run_worker(args: argparse.Namespace) -> int:
         if report.is_file():
             checksum = hashlib.sha256(report.read_bytes()).hexdigest()
             metadata["report"] = {
-                "uri": f"{args.output_uri}/results/{REPORT_NAME}",
+                "uri": f"{args.output_uri}/results/{report_name}",
                 "sha256": checksum,
                 "size_bytes": report.stat().st_size,
             }
             if exit_code == 0:
                 try:
-                    upload_file(bucket, f"{prefix}/results/{REPORT_NAME}", report)
+                    upload_file(bucket, f"{prefix}/results/{report_name}", report)
                 except (GoogleAPIError, GoogleAuthError, OSError) as error:
                     upload_errors.append(f"report upload failed: {error}")
         if time_log.is_file():
@@ -567,9 +631,14 @@ def parser() -> argparse.ArgumentParser:
     subparsers = result.add_subparsers(dest="command", required=True)
 
     run_parser = subparsers.add_parser("run", help="build and submit a report job")
-    run_parser.add_argument("job_type", choices=["four-tile"])
+    run_parser.add_argument("job_type", choices=sorted(JOB_TYPES))
     run_parser.add_argument("--region")
-    run_parser.add_argument("--workers", type=int, default=2)
+    run_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="worker count; defaults to the job type's vCPU count",
+    )
     run_parser.add_argument("--detach", action="store_true")
     run_parser.add_argument("--output")
     run_parser.set_defaults(func=submit)
@@ -585,7 +654,7 @@ def parser() -> argparse.ArgumentParser:
     download_parser.set_defaults(func=download)
 
     worker_parser = subparsers.add_parser("worker", help="internal worker mode")
-    worker_parser.add_argument("job_type", choices=["four-tile"])
+    worker_parser.add_argument("job_type", choices=sorted(JOB_TYPES))
     worker_parser.add_argument("output_uri")
     worker_parser.add_argument("job_id")
     worker_parser.add_argument("git_commit")
@@ -598,7 +667,8 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     try:
         arguments = parser().parse_args()
-        if hasattr(arguments, "workers") and arguments.workers < 1:
+        workers = getattr(arguments, "workers", None)
+        if workers is not None and workers < 1:
             raise RemoteComputeError("--workers must be a positive integer.")
         if hasattr(arguments, "job_id") and not re.fullmatch(
             r"[a-z][a-z0-9-]{0,62}", arguments.job_id

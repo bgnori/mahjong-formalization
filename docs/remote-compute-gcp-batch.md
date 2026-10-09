@@ -1,14 +1,15 @@
 # GCP Batch + Spot VM によるリモート計算方針
 
-状態: 実行環境整備済み・GCP疎通試行前
+状態: 4枚形で疎通確認済み・7枚形で並列動作確認中
 採用日: 2026-10-09
 
 この文書は、10枚形・13枚形などの重いレポート生成を Google Cloud Batch の Spot VM で実行するための
 現行方針を定める。選定時の背景、比較対象、判断理由は
 [remote-compute-platform-rationale-2026-10-09.md](remote-compute-platform-rationale-2026-10-09.md) に残す。
 
-初回疎通用のCLIと計算コンテナは実装済み。GCP上での実ジョブ実行はまだ確認していない。
-最初の試行結果に応じて、machine type、リージョン、再試行回数を更新する。
+疎通用のCLIと計算コンテナは実装済みで、4枚形レポートはSpot VM上で完走しローカル結果と
+バイト単位で一致することを確認済み。10枚形・13枚形の実ジョブ実行はまだ確認していない。
+実測結果に応じて、machine type、リージョン、再試行回数を更新する。
 
 ## 目的
 
@@ -24,14 +25,16 @@
 対象:
 
 - 初回の環境疎通確認としての4枚形レポート生成。
+- 並列動作確認としての7枚形レポート生成。
 - 10枚形レポート生成。
 - 13枚形レポート生成。
 - 将来追加する、数十分以上または大容量メモリを必要とするバッチ計算。
 
 対象外:
 
-- 通常の編集、証明、単体テスト、7枚形レポート。これらは引き続きローカルまたは
-  `development` devcontainerで実行する。4枚形は初回のBatch疎通試行に限り対象とする。
+- 通常の編集、証明、単体テスト。これらは引き続きローカルまたは
+  `development` devcontainerで実行する。4枚形はBatch疎通試行、7枚形は並列動作確認に限り
+  対象とする。
 - 対話的なリモート開発環境。必要な場合はdevcontainerやDevPodを別用途として使う。
 - 常時稼働サーバー、Web API、複数利用者向け計算サービス。
 
@@ -96,11 +99,11 @@ local remote-compute command
 - イメージタグだけでなくdigestを実行メタデータへ保存する。
 - Git commit SHAをイメージタグへ含め、同じcommitでは再利用する。
 - ジョブ種別と実行引数をentrypointへ明示的に渡せる。
-- 中断時はBatchの再試行に任せる。初回の4枚形ジョブに再開用checkpointはない。
+- 中断時はBatchの再試行に任せる。4枚形・7枚形ジョブに再開用checkpointはない。
 
-初回の`remote-compute.Dockerfile`は4枚形レポート生成器をビルドし、Cloud BuildからArtifact
+`remote-compute.Dockerfile`は4枚形と7枚形のレポート生成器をビルドし、Cloud BuildからArtifact
 Registryへpushする。Batch workerはApplication Default Credentialsを使ってレポート、`/usr/bin/time -v`
-の計測値、実行metadataをCloud Storageへ保存する。4枚形には再開用checkpointがないため、中断時は
+の計測値、実行metadataをCloud Storageへ保存する。再開用checkpointがないため、中断時は
 レポート全体を再実行する。
 
 ## 初回試行の準備と実行
@@ -162,10 +165,11 @@ dirty worktreeからの投入は拒否する。
 
 ```bash
 ./scripts/remote-compute run four-tile
+./scripts/remote-compute run seven-tile
 ```
 
 既定では完了まで待ち、検証済みレポートを
-`reports/four-tile-batch-JOB_ID.txt`へ保存する。端末を閉じてもよい非同期投入では次を使い、
+`reports/JOB_TYPE-batch-JOB_ID.txt`へ保存する。端末を閉じてもよい非同期投入では次を使い、
 表示されたJob IDを後で確認・取得する。
 
 ```bash
@@ -174,11 +178,24 @@ dirty worktreeからの投入は拒否する。
 ./scripts/remote-compute download JOB_ID
 ```
 
-初回は`e2-standard-2`、Spot限定、最大3回再試行、最大2時間で実行する。Artifact Registryに同じ
+4枚形は`e2-standard-2`、7枚形は`e2-standard-8`で実行する。いずれもSpot限定、最大3回再試行、
+最大2時間。`--workers`の既定値はそのマシンのvCPU数で、`--workers=N`で上書きできる。Artifact
+Registryに同じ
 commit SHAのイメージがあればdigestを再利用し、Batch jobにはtagでなくdigestを渡す。成果物は
 `gs://BUCKET/jobs/JOB_ID/`以下に保存する。download時は成功metadataとSHA-256を照合し、既存または
 追跡済みのローカルファイルを上書きしない。Spot中断を含む実際の再試行、課金、VM自動削除は、
 GCP上での初回試行後に確認する。
+
+7枚形レポートは末尾に`calculationElapsedMs`を含むため、実行ごとに内容が変わる。
+`reports/seven-tile-report.txt`との比較では、この行を除外する。
+
+```bash
+diff <(grep -v calculationElapsedMs reports/seven-tile-report.txt) \
+     <(grep -v calculationElapsedMs reports/seven-tile-batch-JOB_ID.txt)
+```
+
+並列動作は`gs://BUCKET/jobs/JOB_ID/logs/time-v.txt`の`Percent of CPU this job got`で判定する。
+100%を大きく超えていれば、分類フェーズが並列実行されている。
 
 Mathlib cacheとLake build cacheをコンテナイメージへ含めるかは、イメージサイズと再ビルド時間を
 初回試行で測って決める。
@@ -189,6 +206,8 @@ Mathlib cacheとLake build cacheをコンテナイメージへ含めるかは、
 
 | ジョブ | 初期CPU | 初期メモリ | 初期永続データ容量 |
 | --- | ---: | ---: | ---: |
+| 4枚形 | 2 vCPU | 8 GB | 40 GB |
+| 7枚形 | 8 vCPU | 32 GB | 40 GB |
 | 10枚形 | 4 vCPU | 4 GB以上 | 32 GB以内を想定 |
 | 13枚形 | 16 vCPU | 64 GB以上 | 64 GB以内を想定 |
 
@@ -336,6 +355,13 @@ Batch jobのservice accountには、必要なArtifact Registry imageの取得、
 - Spot VMで4枚形レポートを完走し、Cloud Storageへreport、metadata、`time -v`を保存する。
 - checksum検証後にローカルへdownloadできることを確認する。
 - dirty worktree、未検証・失敗report、既存ファイルへのdownloadが拒否されることを確認する。
+
+### Phase 0.5: 7枚形で並列動作確認
+
+- 8 vCPUのSpot VMで7枚形レポートを完走する。
+- `time -v`の`Percent of CPU this job got`が100%を大きく超えることを確認する。
+- `calculationElapsedMs`行を除いた内容がローカル結果と一致することを確認する。
+- ジョブ種別ごとにmachine type、worker数、成果物名が切り替わることを確認する。
 
 ### Phase 1: 10枚形で疎通確認
 

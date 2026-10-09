@@ -68,16 +68,22 @@ The reports are written to `reports/four-tile-direct-report.txt` and
 
 ### GCP Batch pilot
 
-The four-tile report can also be used to verify the packaged GCP Batch + Spot VM
-workflow. After setting up the GCP resources described in
+The four- and seven-tile reports can also be run through the packaged GCP Batch +
+Spot VM workflow. After setting up the GCP resources described in
 [`docs/remote-compute-gcp-batch.md`](docs/remote-compute-gcp-batch.md), run:
 
 ```bash
-./scripts/remote-compute run four-tile
+./scripts/remote-compute run four-tile    # 2 vCPU, connectivity check
+./scripts/remote-compute run seven-tile   # 8 vCPU, parallel classification
 ```
 
-Use `--detach` to submit without waiting; `status JOB_ID` checks progress and
-`download JOB_ID` retrieves a successful report without overwriting existing files.
+Each job type picks its own machine size and defaults `--workers` to that machine's
+vCPU count. Use `--detach` to submit without waiting; `status JOB_ID` checks progress
+and `download JOB_ID` retrieves a successful report without overwriting existing files.
+
+The seven-tile report ends with a `calculationElapsedMs` line, so successive runs are
+not byte-identical. Compare against `reports/seven-tile-report.txt` with that line
+excluded.
 
 ### Dev containers by workload
 

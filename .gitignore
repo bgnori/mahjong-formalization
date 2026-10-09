@@ -25,6 +25,9 @@ Thumbbs.db
 # Log files
 *.log
 
+# Downloaded GCP Batch report artifacts
+/reports/*-batch-*.txt
+
 # Python artifacts
 __pycache__/
 *.py[cod]

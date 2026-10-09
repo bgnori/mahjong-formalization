@@ -64,15 +64,21 @@ lake build sevenTileReport
 
 ### GCP Batchでの試行
 
-GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。GCPリソースの準備は
+GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。並列動作の確認には
+7枚形レポートを使う。GCPリソースの準備は
 [GCP Batch運用方針](docs/remote-compute-gcp-batch.md)を参照する。
 
 ```bash
-./scripts/remote-compute run four-tile
+./scripts/remote-compute run four-tile    # 2 vCPU、疎通確認
+./scripts/remote-compute run seven-tile   # 8 vCPU、分類フェーズを並列実行
 ```
 
+ジョブ種別ごとにマシンサイズが決まっており、`--workers`の既定値はそのvCPU数になる。
 `--detach`を指定すると完了を待たずに投入できる。`status JOB_ID`で状態を確認し、
 `download JOB_ID`で成功レポートを取得する。既存ファイルは上書きしない。
+
+7枚形レポートは末尾に`calculationElapsedMs`を出力するため、実行ごとに内容が変わる。
+`reports/seven-tile-report.txt`と比較する際はこの行を除外する。
 
 ### 用途別devcontainer
 
