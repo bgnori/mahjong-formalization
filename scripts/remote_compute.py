@@ -576,7 +576,7 @@ def run_worker(args: argparse.Namespace) -> int:
         ]
         metadata["command"] = command[4:]
         try:
-            result = subprocess.run(command, cwd=ROOT, check=False)
+            result = subprocess.run(command, cwd=temp_dir, check=False)
             exit_code = result.returncode
             if exit_code == 0 and not report.is_file():
                 raise RemoteComputeError(
