@@ -235,11 +235,22 @@ class CheckpointTests(unittest.TestCase):
         uploaded: dict[str, tuple[int, int]] = {}
         self.write("bucket-0.bin", "data")
         self.write("bucket-0.bin.part", "half")
+        self.write(remote_compute.GENERATION_MARKER, "MJWC-GENERATION-1\n")
         remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
-        self.assertEqual(sorted(self.bucket.store), ["cp/bucket-0.bin"])
+        self.assertEqual(
+            sorted(self.bucket.store),
+            ["cp/bucket-0.bin", f"cp/{remote_compute.GENERATION_MARKER}"],
+        )
         self.bucket.store.clear()
         remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
         self.assertEqual(self.bucket.store, {})
+
+    def test_sync_skips_buckets_that_generation_has_not_finished(self) -> None:
+        uploaded: dict[str, tuple[int, int]] = {}
+        self.write("bucket-0.bin", "partially written")
+        remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
+        self.assertEqual(self.bucket.store, {})
+        self.assertEqual(uploaded, {})
 
     def test_generation_marker_is_published_after_its_buckets(self) -> None:
         uploaded: dict[str, tuple[int, int]] = {}

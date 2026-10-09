@@ -619,10 +619,17 @@ def sync_checkpoint(
 ) -> None:
     """Upload checkpoint members, publishing the generation marker only once consistent.
 
+    Nothing is uploaded until generation finishes, because the report generator refuses
+    to reuse buckets that are not covered by a generation marker, and every bucket grows
+    throughout the generation phase.
+
     Each member is stamped with the stat it had *before* its upload started, so a file
-    that grew while it was being uploaded is retried on the next pass instead of being
-    mistaken for a complete copy.
+    that changed while it was being uploaded is retried on the next pass instead of
+    being mistaken for a complete copy.
     """
+    marker = local_dir / GENERATION_MARKER
+    if not marker.is_file():
+        return
     for path in checkpoint_files(local_dir):
         before = stat_key(path)
         if uploaded.get(path.name) == before:
@@ -630,8 +637,7 @@ def sync_checkpoint(
         upload_file(bucket, f"{prefix}/{path.name}", path)
         if stat_key(path) == before:
             uploaded[path.name] = before
-    marker = local_dir / GENERATION_MARKER
-    if GENERATION_MARKER in uploaded or not marker.is_file():
+    if GENERATION_MARKER in uploaded:
         return
     if any(uploaded.get(path.name) != stat_key(path) for path in checkpoint_files(local_dir)):
         return
