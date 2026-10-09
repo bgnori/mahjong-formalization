@@ -1,0 +1,14 @@
+*
+!cloudbuild.yaml
+!.dockerignore
+!remote-compute.Dockerfile
+!lean-toolchain
+!lakefile.lean
+!lake-manifest.json
+!Mahjong/
+!Mahjong/**
+!MahjongComputations/
+!MahjongComputations/**
+!scripts/
+!scripts/remote_compute.py
+!scripts/remote-compute-requirements.txt

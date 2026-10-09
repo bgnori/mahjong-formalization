@@ -1,0 +1,9 @@
+.git
+.lake
+.devcontainer
+docs
+examples
+MahjongTests
+reports
+__pycache__
+*.py[cod]

@@ -1,14 +1,14 @@
 # GCP Batch + Spot VM によるリモート計算方針
 
-状態: 試行予定  
+状態: 実行環境整備済み・GCP疎通試行前
 採用日: 2026-10-09
 
 この文書は、10枚形・13枚形などの重いレポート生成を Google Cloud Batch の Spot VM で実行するための
 現行方針を定める。選定時の背景、比較対象、判断理由は
 [remote-compute-platform-rationale-2026-10-09.md](remote-compute-platform-rationale-2026-10-09.md) に残す。
 
-ここに書くCLI、コンテナイメージ、GCPリソースはまだ実装されていない。最初の試行結果に応じて、
-具体的なmachine type、リージョン、再試行回数を更新する。
+初回疎通用のCLIと計算コンテナは実装済み。GCP上での実ジョブ実行はまだ確認していない。
+最初の試行結果に応じて、machine type、リージョン、再試行回数を更新する。
 
 ## 目的
 
@@ -23,14 +23,15 @@
 
 対象:
 
+- 初回の環境疎通確認としての4枚形レポート生成。
 - 10枚形レポート生成。
 - 13枚形レポート生成。
 - 将来追加する、数十分以上または大容量メモリを必要とするバッチ計算。
 
 対象外:
 
-- 通常の編集、証明、単体テスト、4枚形・7枚形レポート。これらは引き続きローカルまたは
-  `development` devcontainerで実行する。
+- 通常の編集、証明、単体テスト、7枚形レポート。これらは引き続きローカルまたは
+  `development` devcontainerで実行する。4枚形は初回のBatch疎通試行に限り対象とする。
 - 対話的なリモート開発環境。必要な場合はdevcontainerやDevPodを別用途として使う。
 - 常時稼働サーバー、Web API、複数利用者向け計算サービス。
 
@@ -39,15 +40,14 @@
 最終的には、GCP固有の操作をラッパーの内側へ隠す。
 
 ```bash
-./scripts/remote-compute thirteen-tile
+./scripts/remote-compute run four-tile
 ```
 
-補助操作は次の形を目標とする。コマンド名と引数は実装時に確定する。
+初回試行では`run`、`status`、`download`を提供する。
 
 ```bash
-./scripts/remote-compute thirteen-tile --detach
+./scripts/remote-compute run four-tile --detach
 ./scripts/remote-compute status JOB_ID
-./scripts/remote-compute logs JOB_ID
 ./scripts/remote-compute download JOB_ID
 ```
 
@@ -81,7 +81,7 @@ local remote-compute command
 | Artifact Registry | commitに対応する計算コンテナイメージ |
 | Cloud Storage | 中間生成物、最終レポート、メタデータ、補助ログ |
 | Cloud Logging | 実行中の標準出力・標準エラー確認 |
-| Cloud Build | ローカルでイメージをビルドしない場合の候補 |
+| Cloud Build | 計算イメージのビルド |
 
 初期試行では、プロジェクト、Artifact Registry repository、Cloud Storage bucketを各1個にする。
 不要なネットワーク、常設VM、Kubernetes cluster、独自のジョブ管理サーバーは作らない。
@@ -96,7 +96,84 @@ local remote-compute command
 - イメージタグだけでなくdigestを実行メタデータへ保存する。
 - Git commit SHAをイメージタグへ含め、同じcommitでは再利用する。
 - ジョブ種別と実行引数をentrypointへ明示的に渡せる。
-- SIGTERMを受けたとき、可能な範囲でログと完了済み中間生成物を退避する。
+- 中断時はBatchの再試行に任せる。初回の4枚形ジョブに再開用checkpointはない。
+
+初回の`remote-compute.Dockerfile`は4枚形レポート生成器をビルドし、Cloud BuildからArtifact
+Registryへpushする。Batch workerはApplication Default Credentialsを使ってレポート、`/usr/bin/time -v`
+の計測値、実行metadataをCloud Storageへ保存する。4枚形には再開用checkpointがないため、中断時は
+レポート全体を再実行する。
+
+## 初回試行の準備と実行
+
+必要なローカルツールはGit、Python 3、Google Cloud CLI。GCP project内でBatch、Compute Engine、
+Artifact Registry、Cloud Build、Cloud Storage、Cloud Logging APIを有効にする。Artifact Registry
+repositoryとCloud Storage bucketは同じregionに作成する。Batch service accountには、対象repository
+の`roles/artifactregistry.reader`、対象bucketの`roles/storage.objectAdmin`、projectの
+`roles/logging.logWriter`を付与する。操作する利用者にはCloud Build/Artifact Registryへのpush権限、
+Batch jobの作成権限、およびBatch service accountの`iam.serviceAccountUser`権限が必要。
+Cloud Buildのbuild identityにも対象repositoryへのpush権限を付与する。
+
+設定する環境変数:
+
+```bash
+export GCP_PROJECT="your-project-id"
+export GCP_REGION="us-central1"
+export GCP_ARTIFACT_REPOSITORY="mahjong-compute"
+export GCP_BUCKET="your-unique-bucket-name"
+export GCP_BATCH_SERVICE_ACCOUNT="mahjong-batch@your-project-id.iam.gserviceaccount.com"
+```
+
+初回だけ必要なrepository、bucket、service accountは、存在しない場合に作成する。
+
+```bash
+gcloud services enable batch.googleapis.com compute.googleapis.com \
+  artifactregistry.googleapis.com cloudbuild.googleapis.com \
+  storage.googleapis.com logging.googleapis.com --project="$GCP_PROJECT"
+gcloud artifacts repositories create "$GCP_ARTIFACT_REPOSITORY" \
+  --repository-format=docker --location="$GCP_REGION" --project="$GCP_PROJECT"
+gcloud storage buckets create "gs://$GCP_BUCKET" \
+  --location="$GCP_REGION" --uniform-bucket-level-access --project="$GCP_PROJECT"
+gcloud iam service-accounts create mahjong-batch --project="$GCP_PROJECT"
+```
+
+service accountへ実行に必要な権限を付ける。Artifact Registryへのpush権限はCloud Buildのbuild
+identityにも必要である。
+
+```bash
+gcloud artifacts repositories add-iam-policy-binding "$GCP_ARTIFACT_REPOSITORY" \
+  --location="$GCP_REGION" --project="$GCP_PROJECT" \
+  --member="serviceAccount:$GCP_BATCH_SERVICE_ACCOUNT" \
+  --role=roles/artifactregistry.reader
+gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
+  --member="serviceAccount:$GCP_BATCH_SERVICE_ACCOUNT" \
+  --role=roles/storage.objectAdmin
+gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
+  --member="serviceAccount:$GCP_BATCH_SERVICE_ACCOUNT" \
+  --role=roles/logging.logWriter
+```
+
+作業ツリーをcommitした状態で投入する。commit SHAをコンテナtagとmetadataへ記録するため、
+dirty worktreeからの投入は拒否する。
+
+```bash
+./scripts/remote-compute run four-tile
+```
+
+既定では完了まで待ち、検証済みレポートを
+`reports/four-tile-batch-JOB_ID.txt`へ保存する。端末を閉じてもよい非同期投入では次を使い、
+表示されたJob IDを後で確認・取得する。
+
+```bash
+./scripts/remote-compute run four-tile --detach
+./scripts/remote-compute status JOB_ID
+./scripts/remote-compute download JOB_ID
+```
+
+初回は`e2-standard-2`、Spot限定、最大3回再試行、最大2時間で実行する。Artifact Registryに同じ
+commit SHAのイメージがあればdigestを再利用し、Batch jobにはtagでなくdigestを渡す。成果物は
+`gs://BUCKET/jobs/JOB_ID/`以下に保存する。download時は成功metadataとSHA-256を照合し、既存または
+追跡済みのローカルファイルを上書きしない。Spot中断を含む実際の再試行、課金、VM自動削除は、
+GCP上での初回試行後に確認する。
 
 Mathlib cacheとLake build cacheをコンテナイメージへ含めるかは、イメージサイズと再ビルド時間を
 初回試行で測って決める。
@@ -248,10 +325,16 @@ Batch jobのservice accountには、必要なArtifact Registry imageの取得、
 
 ## 導入段階と完了条件
 
+### Phase 0: 4枚形で環境疎通
+
+- commit SHAで識別できる計算イメージをCloud Buildで作り、Artifact Registryへpushする。
+- Spot VMで4枚形レポートを完走し、Cloud Storageへreport、metadata、`time -v`を保存する。
+- checksum検証後にローカルへdownloadできることを確認する。
+- dirty worktree、未検証・失敗report、既存ファイルへのdownloadが拒否されることを確認する。
+
 ### Phase 1: 10枚形で疎通確認
 
-- GCPリソースのbootstrap手順を作る。
-- 計算イメージを作り、commit SHAで再利用できることを確認する。
+- Phase 0で用意したGCPリソースとパッケージングを再利用する。
 - Spot VMで10枚形レポートを完走する。
 - VMが自動削除されることを確認する。
 - ローカル結果と主要件数、checksumを比較する。

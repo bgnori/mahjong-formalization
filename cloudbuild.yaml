@@ -1,0 +1,13 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - remote-compute.Dockerfile
+      - --build-arg
+      - GIT_COMMIT=${_GIT_COMMIT}
+      - -t
+      - ${_IMAGE_URI}
+      - .
+images:
+  - ${_IMAGE_URI}

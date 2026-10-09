@@ -66,6 +66,19 @@ lake build sevenTileReport
 The reports are written to `reports/four-tile-direct-report.txt` and
 `reports/seven-tile-report.txt`.
 
+### GCP Batch pilot
+
+The four-tile report can also be used to verify the packaged GCP Batch + Spot VM
+workflow. After setting up the GCP resources described in
+[`docs/remote-compute-gcp-batch.md`](docs/remote-compute-gcp-batch.md), run:
+
+```bash
+./scripts/remote-compute run four-tile
+```
+
+Use `--detach` to submit without waiting; `status JOB_ID` checks progress and
+`download JOB_ID` retrieves a successful report without overwriting existing files.
+
 ### Dev containers by workload
 
 Choose a dev container configuration based on the output being generated:

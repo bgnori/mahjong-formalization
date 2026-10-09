@@ -62,6 +62,18 @@ lake build sevenTileReport
 
 出力先はそれぞれ `reports/four-tile-direct-report.txt` と `reports/seven-tile-report.txt` です。
 
+### GCP Batchでの試行
+
+GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。GCPリソースの準備は
+[GCP Batch運用方針](docs/remote-compute-gcp-batch.md)を参照する。
+
+```bash
+./scripts/remote-compute run four-tile
+```
+
+`--detach`を指定すると完了を待たずに投入できる。`status JOB_ID`で状態を確認し、
+`download JOB_ID`で成功レポートを取得する。既存ファイルは上書きしない。
+
 ### 用途別devcontainer
 
 devcontainerは、生成する内容に応じて次の3構成から選択する。
