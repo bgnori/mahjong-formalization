@@ -1,6 +1,6 @@
 # GCP Batch + Spot VM によるリモート計算方針
 
-状態: 4枚形・7枚形・10枚形のGCP Batch実行確認済み
+状態: 4枚形・7枚形・10枚形のGCP Batch実行確認済み、13枚形は実行中
 採用日: 2026-10-09
 
 この文書は、10枚形・13枚形などの重いレポート生成を Google Cloud Batch の Spot VM で実行するための
@@ -10,7 +10,8 @@
 疎通用のCLIと計算コンテナは実装済み。4枚形レポートはSpot VM上で完走しローカル結果と
 バイト単位で一致することを確認済み。7枚形レポートも`e2-standard-8`のSpot VMで完走し、
 CPU使用率193%で並列動作することを確認済み。10枚形も4 vCPUのSpot VMで完走し、
-ローカル結果との一致を確認済み。13枚形の実ジョブ実行はまだ確認していない。
+ローカル結果との一致を確認済み。10枚形と13枚形はbucket単位のcheckpointをCloud Storageへ
+同期して中断から再開できる。13枚形は`n2-standard-32`で投入済みで、完走結果はまだ出ていない。
 実測結果に応じて、machine type、リージョン、再試行回数を更新する。
 
 ## 目的
@@ -396,6 +397,13 @@ Batch jobのservice accountには、必要なArtifact Registry imageの取得、
 - `calculationElapsedMs`行を除いたレポート本文がローカル結果と一致した。
 - 初回は作業ディレクトリの書込権限問題で失敗したため、workerは一時ディレクトリから
   生成器を起動する構成へ修正した。
+
+checkpoint機構を追加した後の再実行（2026-10-09、`8b1db16`）:
+
+- 計算時間は285秒で、レポート本文はローカル結果と一致したままだった。
+- `checkpoint_uploaded_files`は121で、生成済みbucketと分類済みbucketがCloud Storageへ
+  同期されることを確認した。
+- 成功時に`gs://BUCKET/checkpoints/ten-tile/COMMIT/`が削除されることを確認した。
 
 ### Phase 2: 13枚形の資源測定
 
