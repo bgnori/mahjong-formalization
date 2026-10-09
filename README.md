@@ -68,19 +68,27 @@ The reports are written to `reports/four-tile-direct-report.txt` and
 
 ### GCP Batch pilot
 
-The four- and seven-tile reports can also be run through the packaged GCP Batch +
-Spot VM workflow. After setting up the GCP resources described in
-[`docs/remote-compute-gcp-batch.md`](docs/remote-compute-gcp-batch.md), run:
+The four-, seven-, ten-, and thirteen-tile reports can all be run through the
+packaged GCP Batch + Spot VM workflow. After setting up the GCP resources described
+in [`docs/remote-compute-gcp-batch.md`](docs/remote-compute-gcp-batch.md), run:
 
 ```bash
-./scripts/remote-compute run four-tile    # 2 vCPU, connectivity check
-./scripts/remote-compute run seven-tile   # 8 vCPU, parallel classification
-./scripts/remote-compute run ten-tile     # 4 vCPU, exhaustive ten-tile report
+./scripts/remote-compute run four-tile      # 2 vCPU, connectivity check
+./scripts/remote-compute run seven-tile     # 8 vCPU, parallel classification
+./scripts/remote-compute run ten-tile       # 4 vCPU, exhaustive ten-tile report
+./scripts/remote-compute run thirteen-tile  # 32 vCPU, multi-hour, checkpointed
 ```
 
 Each job type picks its own machine size and defaults `--workers` to that machine's
 vCPU count. Use `--detach` to submit without waiting; `status JOB_ID` checks progress
 and `download JOB_ID` retrieves a successful report without overwriting existing files.
+
+The ten- and thirteen-tile reports stream their external buckets and per-bucket
+classification results to Cloud Storage, so a Spot preemption resumes from the last
+checkpoint instead of restarting. Pass `--fresh` to discard stored checkpoints and
+recompute from scratch. A resumed run reports different `waitCoreCache*` statistics
+than an uninterrupted one, because the wait-core cache lives only in the process that
+builds it; every other line of the report is unaffected.
 
 The seven-tile report ends with a `calculationElapsedMs` line, so successive runs are
 not byte-identical. Compare against `reports/seven-tile-report.txt` with that line

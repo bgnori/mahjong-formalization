@@ -69,14 +69,20 @@ GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。
 [GCP Batch運用方針](docs/remote-compute-gcp-batch.md)を参照する。
 
 ```bash
-./scripts/remote-compute run four-tile    # 2 vCPU、疎通確認
-./scripts/remote-compute run seven-tile   # 8 vCPU、分類フェーズを並列実行
-./scripts/remote-compute run ten-tile     # 4 vCPU、10枚形レポート
+./scripts/remote-compute run four-tile      # 2 vCPU、疎通確認
+./scripts/remote-compute run seven-tile     # 8 vCPU、分類フェーズを並列実行
+./scripts/remote-compute run ten-tile       # 4 vCPU、10枚形レポート
+./scripts/remote-compute run thirteen-tile  # 32 vCPU、数時間、checkpoint付き
 ```
 
 ジョブ種別ごとにマシンサイズが決まっており、`--workers`の既定値はそのvCPU数になる。
 `--detach`を指定すると完了を待たずに投入できる。`status JOB_ID`で状態を確認し、
 `download JOB_ID`で成功レポートを取得する。既存ファイルは上書きしない。
+
+10枚形と13枚形は、外部bucketとbucketごとの分類結果をCloud Storageへ同期する。Spot中断後は
+最後のcheckpointから再開し、最初からやり直さない。`--fresh`を付けると保存済みcheckpointを
+破棄して再計算する。再開した実行の`waitCoreCache*`の値は通し実行と必ず異なる。
+wait-coreキャッシュはプロセス内にしか存在しないためで、レポートのそれ以外の行は一致する。
 
 7枚形レポートは末尾に`calculationElapsedMs`を出力するため、実行ごとに内容が変わる。
 `reports/seven-tile-report.txt`と比較する際はこの行を除外する。

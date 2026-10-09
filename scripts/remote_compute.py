@@ -9,9 +9,11 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -24,6 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REGION = "us-central1"
 MAX_RETRIES = 3
 MAX_RUNTIME_SECONDS = 7200
+CHECKPOINT_SYNC_SECONDS = 120
+GENERATION_MARKER = "generation.done"
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,28 @@ class JobType:
     task_memory_mib: int
     default_workers: int
     boot_disk_gb: int = 40
+    max_runtime_seconds: int = MAX_RUNTIME_SECONDS
+    checkpoint_dir: str | None = None
+    bucket_count: int | None = None
+    classification_divisor: int | None = None
+
+    def work_directory(self, work_dir: Path) -> Path | None:
+        """Absolute path of the resumable bucket directory, when the report has one."""
+        return None if self.checkpoint_dir is None else work_dir / self.checkpoint_dir
+
+    def report_arguments(self, workers: int, work_dir: Path) -> list[str]:
+        """CLI arguments that configure parallelism and the external bucket directory."""
+        if self.classification_divisor is None:
+            return [f"--workers={workers}"]
+        classification = max(1, workers // self.classification_divisor)
+        arguments = [
+            f"--generation-workers={workers}",
+            f"--classification-workers={classification}",
+        ]
+        if self.bucket_count is not None:
+            arguments.append(f"--buckets={self.bucket_count}")
+        arguments.append(f"--work-dir={self.work_directory(work_dir)}")
+        return arguments
 
 
 JOB_TYPES: dict[str, JobType] = {
@@ -71,6 +97,22 @@ JOB_TYPES: dict[str, JobType] = {
         memory_mib=16384,
         task_memory_mib=12288,
         default_workers=4,
+        checkpoint_dir=".lake/build/ten-tile-buckets",
+    ),
+    "thirteen-tile": JobType(
+        name="thirteen-tile",
+        executable="thirteen-tile-report-gen",
+        report_name="thirteen-tile-report.txt",
+        machine_type="n2-standard-32",
+        vcpu=32,
+        memory_mib=131072,
+        task_memory_mib=118784,
+        default_workers=32,
+        boot_disk_gb=100,
+        max_runtime_seconds=50400,
+        checkpoint_dir="thirteen-tile-buckets",
+        bucket_count=256,
+        classification_divisor=2,
     ),
 }
 
@@ -185,7 +227,20 @@ def build_job_spec(
     output_uri: str,
     job_type: JobType,
     workers: int,
+    fresh: bool,
 ) -> dict[str, Any]:
+    worker_command = [
+        "/opt/mahjong/scripts/remote_compute.py",
+        "worker",
+        job_type.name,
+        output_uri,
+        job_id,
+        git_commit,
+        image_uri,
+        str(workers),
+    ]
+    if fresh:
+        worker_command.append("--fresh")
     return {
         "taskGroups": [
             {
@@ -197,16 +252,7 @@ def build_job_spec(
                             "container": {
                                 "imageUri": image_uri,
                                 "entrypoint": "python3",
-                                "commands": [
-                                    "/opt/mahjong/scripts/remote_compute.py",
-                                    "worker",
-                                    job_type.name,
-                                    output_uri,
-                                    job_id,
-                                    git_commit,
-                                    image_uri,
-                                    str(workers),
-                                ],
+                                "commands": worker_command,
                             },
                             "environment": {
                                 "variables": {
@@ -224,7 +270,7 @@ def build_job_spec(
                         "memoryMib": job_type.task_memory_mib,
                     },
                     "maxRetryCount": MAX_RETRIES,
-                    "maxRunDuration": f"{MAX_RUNTIME_SECONDS}s",
+                    "maxRunDuration": f"{job_type.max_runtime_seconds}s",
                 },
             }
         ],
@@ -317,6 +363,14 @@ def output_uri(bucket: str, job_id: str) -> str:
     return f"gs://{bucket}/jobs/{job_id}"
 
 
+def checkpoint_prefix(job_type: JobType, git_commit: str) -> str:
+    return f"checkpoints/{job_type.name}/{git_commit}"
+
+
+def checkpoint_uri(bucket: str, job_type: JobType, git_commit: str) -> str:
+    return f"gs://{bucket}/{checkpoint_prefix(job_type, git_commit)}"
+
+
 def submit(args: argparse.Namespace) -> int:
     project = get_project()
     if not project:
@@ -346,7 +400,16 @@ def submit(args: argparse.Namespace) -> int:
         f"  workers: {workers}\n"
         "  provisioning: Spot only\n"
         f"  maximum retries: {MAX_RETRIES}\n"
-        f"  maximum runtime: {MAX_RUNTIME_SECONDS // 60} minutes\n"
+        f"  maximum runtime: {job_type.max_runtime_seconds // 60} minutes\n"
+        f"  checkpoints: "
+        + (
+            "disabled (--fresh)"
+            if args.fresh
+            else checkpoint_uri(bucket, job_type, commit)
+            if job_type.checkpoint_dir
+            else "not supported by this report"
+        )
+        + "\n"
         f"  output: {output_uri(bucket, job_id)}",
         flush=True,
     )
@@ -362,6 +425,7 @@ def submit(args: argparse.Namespace) -> int:
         output_uri=output_uri(bucket, job_id),
         job_type=job_type,
         workers=workers,
+        fresh=args.fresh,
     )
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", suffix=".json"
@@ -511,6 +575,75 @@ def upload_file(bucket: Any, name: str, path: Path) -> None:
     bucket.blob(name).upload_from_filename(str(path))
 
 
+def stat_key(path: Path) -> tuple[int, int]:
+    status = path.stat()
+    return (status.st_size, status.st_mtime_ns)
+
+
+def checkpoint_files(local_dir: Path) -> list[Path]:
+    """Checkpoint members excluding the completion marker and in-progress writes."""
+    if not local_dir.is_dir():
+        return []
+    return sorted(
+        path
+        for path in local_dir.iterdir()
+        if path.is_file()
+        and path.name != GENERATION_MARKER
+        and not path.name.endswith(".part")
+    )
+
+
+def restore_checkpoint(
+    client: Any, bucket: Any, prefix: str, local_dir: Path
+) -> dict[str, tuple[int, int]]:
+    """Download a previous attempt's buckets and per-bucket classification results."""
+    local_dir.mkdir(parents=True, exist_ok=True)
+    restored: dict[str, tuple[int, int]] = {}
+    for blob in client.list_blobs(bucket, prefix=f"{prefix}/"):
+        name = blob.name[len(prefix) + 1 :]
+        if not name or "/" in name:
+            continue
+        target = local_dir / name
+        partial = target.with_name(f"{name}.download")
+        blob.download_to_filename(str(partial))
+        partial.replace(target)
+        restored[name] = stat_key(target)
+    return restored
+
+
+def sync_checkpoint(
+    bucket: Any,
+    prefix: str,
+    local_dir: Path,
+    uploaded: dict[str, tuple[int, int]],
+) -> None:
+    """Upload checkpoint members, publishing the generation marker only once consistent.
+
+    Each member is stamped with the stat it had *before* its upload started, so a file
+    that grew while it was being uploaded is retried on the next pass instead of being
+    mistaken for a complete copy.
+    """
+    for path in checkpoint_files(local_dir):
+        before = stat_key(path)
+        if uploaded.get(path.name) == before:
+            continue
+        upload_file(bucket, f"{prefix}/{path.name}", path)
+        if stat_key(path) == before:
+            uploaded[path.name] = before
+    marker = local_dir / GENERATION_MARKER
+    if GENERATION_MARKER in uploaded or not marker.is_file():
+        return
+    if any(uploaded.get(path.name) != stat_key(path) for path in checkpoint_files(local_dir)):
+        return
+    upload_file(bucket, f"{prefix}/{GENERATION_MARKER}", marker)
+    uploaded[GENERATION_MARKER] = stat_key(marker)
+
+
+def clear_checkpoint(client: Any, bucket: Any, prefix: str) -> None:
+    for blob in client.list_blobs(bucket, prefix=f"{prefix}/"):
+        blob.delete()
+
+
 def run_worker(args: argparse.Namespace) -> int:
     from google.api_core.exceptions import GoogleAPIError
     from google.auth.exceptions import GoogleAuthError
@@ -526,6 +659,11 @@ def run_worker(args: argparse.Namespace) -> int:
     started_at = datetime.now(timezone.utc)
     exit_code = 1
     upload_errors: list[str] = []
+    checkpoints = job_type.checkpoint_dir is not None and not args.fresh
+    state_prefix = checkpoint_prefix(job_type, args.git_commit)
+    work_dir = Path(tempfile.gettempdir()) / f"mahjong-work-{job_type.name}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    bucket_dir = job_type.work_directory(work_dir)
     metadata: dict[str, Any] = {
         "job_id": args.job_id,
         "job_type": job_type.name,
@@ -539,7 +677,11 @@ def run_worker(args: argparse.Namespace) -> int:
         "workers": args.workers,
         "started_at": started,
         "output_uri": args.output_uri,
+        "checkpoint_uri": (
+            f"gs://{bucket_name}/{state_prefix}" if checkpoints else None
+        ),
     }
+    report_arguments = job_type.report_arguments(args.workers, work_dir)
     request = {
         "job_id": args.job_id,
         "job_type": job_type.name,
@@ -550,8 +692,8 @@ def run_worker(args: argparse.Namespace) -> int:
         "vcpu": os.environ.get("BATCH_VCPU"),
         "memory_mib": os.environ.get("BATCH_MEMORY_MIB"),
         "max_retries": MAX_RETRIES,
-        "max_run_duration_seconds": MAX_RUNTIME_SECONDS,
-        "arguments": [f"--workers={args.workers}"],
+        "max_run_duration_seconds": job_type.max_runtime_seconds,
+        "arguments": report_arguments,
     }
     request_path = Path(tempfile.gettempdir()) / f"{args.job_id}-request.json"
     request_path.write_text(json.dumps(request, indent=2) + "\n", encoding="utf-8")
@@ -561,6 +703,47 @@ def run_worker(args: argparse.Namespace) -> int:
         request_path.unlink(missing_ok=True)
         raise RemoteComputeError(f"Could not upload job request: {error}") from error
     request_path.unlink(missing_ok=True)
+
+    uploaded: dict[str, tuple[int, int]] = {}
+    if bucket_dir is not None and args.fresh:
+        shutil.rmtree(bucket_dir, ignore_errors=True)
+        try:
+            clear_checkpoint(client, bucket, state_prefix)
+        except (GoogleAPIError, GoogleAuthError) as error:
+            raise RemoteComputeError(
+                f"Could not clear checkpoints at gs://{bucket_name}/{state_prefix}: {error}"
+            ) from error
+    if checkpoints and bucket_dir is not None:
+        try:
+            uploaded = restore_checkpoint(client, bucket, state_prefix, bucket_dir)
+        except (GoogleAPIError, GoogleAuthError, OSError) as error:
+            raise RemoteComputeError(
+                f"Could not restore checkpoints from gs://{bucket_name}/{state_prefix}: "
+                f"{error}"
+            ) from error
+        metadata["checkpoint_restored_files"] = len(uploaded)
+        print(
+            f"Restored {len(uploaded)} checkpoint files from "
+            f"gs://{bucket_name}/{state_prefix}",
+            flush=True,
+        )
+
+    stop_syncing = threading.Event()
+    sync_errors: list[str] = []
+
+    def sync_loop() -> None:
+        while not stop_syncing.wait(CHECKPOINT_SYNC_SECONDS):
+            try:
+                sync_checkpoint(bucket, state_prefix, bucket_dir, uploaded)
+            except (GoogleAPIError, GoogleAuthError, OSError) as error:
+                sync_errors.append(f"checkpoint sync failed: {error}")
+                print(sync_errors[-1], file=sys.stderr, flush=True)
+
+    syncer: threading.Thread | None = None
+    if checkpoints and bucket_dir is not None:
+        syncer = threading.Thread(target=sync_loop, daemon=True)
+        syncer.start()
+
     with tempfile.TemporaryDirectory(prefix="mahjong-batch-") as temp:
         temp_dir = Path(temp)
         report = temp_dir / report_name
@@ -571,12 +754,12 @@ def run_worker(args: argparse.Namespace) -> int:
             "-o",
             str(time_log),
             str(ROOT / ".lake" / "build" / "bin" / job_type.executable),
-            f"--workers={args.workers}",
+            *report_arguments,
             str(report),
         ]
         metadata["command"] = command[4:]
         try:
-            result = subprocess.run(command, cwd=temp_dir, check=False)
+            result = subprocess.run(command, cwd=work_dir, check=False)
             exit_code = result.returncode
             if exit_code == 0 and not report.is_file():
                 raise RemoteComputeError(
@@ -585,6 +768,25 @@ def run_worker(args: argparse.Namespace) -> int:
         except (OSError, RemoteComputeError) as error:
             print(f"Computation failed: {error}", file=sys.stderr, flush=True)
             exit_code = 1
+
+        stop_syncing.set()
+        if syncer is not None:
+            syncer.join(timeout=CHECKPOINT_SYNC_SECONDS)
+        if checkpoints and bucket_dir is not None and exit_code != 0:
+            try:
+                sync_checkpoint(bucket, state_prefix, bucket_dir, uploaded)
+            except (GoogleAPIError, GoogleAuthError, OSError) as error:
+                sync_errors.append(f"final checkpoint sync failed: {error}")
+        if checkpoints and bucket_dir is not None:
+            metadata["checkpoint_uploaded_files"] = len(uploaded)
+        if checkpoints and bucket_dir is not None and exit_code == 0:
+            try:
+                clear_checkpoint(client, bucket, state_prefix)
+                uploaded.clear()
+            except (GoogleAPIError, GoogleAuthError) as error:
+                sync_errors.append(f"checkpoint cleanup failed: {error}")
+        if sync_errors:
+            metadata["checkpoint_sync_errors"] = sync_errors
 
         ended = utc_now()
         metadata.update(
@@ -650,6 +852,11 @@ def parser() -> argparse.ArgumentParser:
         help="worker count; defaults to the job type's vCPU count",
     )
     run_parser.add_argument("--detach", action="store_true")
+    run_parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="ignore and delete any stored checkpoints for this commit",
+    )
     run_parser.add_argument("--output")
     run_parser.set_defaults(func=submit)
 
@@ -670,6 +877,7 @@ def parser() -> argparse.ArgumentParser:
     worker_parser.add_argument("git_commit")
     worker_parser.add_argument("image")
     worker_parser.add_argument("workers", type=int)
+    worker_parser.add_argument("--fresh", action="store_true")
     worker_parser.set_defaults(func=run_worker)
     return result
 

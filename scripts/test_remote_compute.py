@@ -1,12 +1,15 @@
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 import remote_compute
 
 
-def job_spec(job_type_name: str, workers: int) -> dict:
+def job_spec(job_type_name: str, workers: int, fresh: bool = False) -> dict:
     return remote_compute.build_job_spec(
         project="example-project",
         region="us-central1",
@@ -20,6 +23,7 @@ def job_spec(job_type_name: str, workers: int) -> dict:
         output_uri=f"gs://example-bucket/jobs/mahjong-{job_type_name}-test-123",
         job_type=remote_compute.JOB_TYPES[job_type_name],
         workers=workers,
+        fresh=fresh,
     )
 
 
@@ -155,6 +159,118 @@ class TenTileJobTests(unittest.TestCase):
         self.assertEqual(commands[-1], "4")
         self.assertEqual(self.job_type.executable, "ten-tile-report-gen")
         self.assertEqual(self.job_type.report_name, "ten-tile-report.txt")
+
+
+class ThirteenTileJobTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.job_type = remote_compute.JOB_TYPES["thirteen-tile"]
+        self.job = job_spec("thirteen-tile", self.job_type.default_workers)
+
+    def test_thirteen_tile_requests_a_large_long_running_machine(self) -> None:
+        task = self.job["taskGroups"][0]["taskSpec"]
+        policy = self.job["allocationPolicy"]["instances"][0]["policy"]
+        self.assertEqual(policy["machineType"], "n2-standard-32")
+        self.assertEqual(policy["provisioningModel"], "SPOT")
+        self.assertEqual(task["computeResource"]["cpuMilli"], 32000)
+        self.assertEqual(
+            task["maxRunDuration"], f"{self.job_type.max_runtime_seconds}s"
+        )
+        self.assertGreater(
+            self.job_type.max_runtime_seconds, remote_compute.MAX_RUNTIME_SECONDS
+        )
+
+    def test_thirteen_tile_splits_generation_and_classification_workers(self) -> None:
+        arguments = self.job_type.report_arguments(32, Path("/work"))
+        self.assertEqual(
+            arguments,
+            [
+                "--generation-workers=32",
+                "--classification-workers=16",
+                "--buckets=256",
+                "--work-dir=/work/thirteen-tile-buckets",
+            ],
+        )
+
+    def test_reports_without_split_workers_keep_a_single_worker_flag(self) -> None:
+        self.assertEqual(
+            remote_compute.JOB_TYPES["ten-tile"].report_arguments(4, Path("/work")),
+            ["--workers=4"],
+        )
+
+
+class CheckpointTests(unittest.TestCase):
+    class FakeBlob:
+        def __init__(self, store: dict, name: str) -> None:
+            self.store = store
+            self.name = name
+
+        def upload_from_filename(self, path: str) -> None:
+            self.store[self.name] = Path(path).read_bytes()
+
+    class FakeBucket:
+        def __init__(self) -> None:
+            self.store: dict[str, bytes] = {}
+
+        def blob(self, name: str):
+            return CheckpointTests.FakeBlob(self.store, name)
+
+    def setUp(self) -> None:
+        self.bucket = self.FakeBucket()
+        self.temp = tempfile.TemporaryDirectory()
+        self.local = Path(self.temp.name)
+        self.addCleanup(self.temp.cleanup)
+
+    def write(self, name: str, text: str) -> None:
+        (self.local / name).write_text(text, encoding="utf-8")
+
+    def test_checkpoint_prefix_is_scoped_by_job_type_and_commit(self) -> None:
+        self.assertEqual(
+            remote_compute.checkpoint_prefix(
+                remote_compute.JOB_TYPES["thirteen-tile"], "b" * 40
+            ),
+            f"checkpoints/thirteen-tile/{'b' * 40}",
+        )
+
+    def test_sync_uploads_members_and_skips_unchanged_and_partial_files(self) -> None:
+        uploaded: dict[str, tuple[int, int]] = {}
+        self.write("bucket-0.bin", "data")
+        self.write("bucket-0.bin.part", "half")
+        remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
+        self.assertEqual(sorted(self.bucket.store), ["cp/bucket-0.bin"])
+        self.bucket.store.clear()
+        remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
+        self.assertEqual(self.bucket.store, {})
+
+    def test_generation_marker_is_published_after_its_buckets(self) -> None:
+        uploaded: dict[str, tuple[int, int]] = {}
+        self.write("bucket-0.bin", "data")
+        self.write(remote_compute.GENERATION_MARKER, "MJWC-GENERATION-1\n")
+        remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
+        self.assertEqual(
+            sorted(self.bucket.store),
+            ["cp/bucket-0.bin", f"cp/{remote_compute.GENERATION_MARKER}"],
+        )
+
+    def test_generation_marker_waits_while_a_bucket_is_still_growing(self) -> None:
+        uploaded: dict[str, tuple[int, int]] = {}
+        growing = self.local / "bucket-0.bin"
+        growing.write_text("data", encoding="utf-8")
+        self.write(remote_compute.GENERATION_MARKER, "MJWC-GENERATION-1\n")
+        original = remote_compute.upload_file
+
+        def grow_during_upload(bucket, name, path):
+            original(bucket, name, path)
+            if path == growing:
+                growing.write_text("data+more", encoding="utf-8")
+                os.utime(growing, ns=(0, 0))
+
+        remote_compute.upload_file = grow_during_upload
+        self.addCleanup(setattr, remote_compute, "upload_file", original)
+        remote_compute.sync_checkpoint(self.bucket, "cp", self.local, uploaded)
+        self.assertNotIn(
+            f"cp/{remote_compute.GENERATION_MARKER}", self.bucket.store
+        )
+        self.assertNotIn("bucket-0.bin", uploaded)
 
 
 if __name__ == "__main__":

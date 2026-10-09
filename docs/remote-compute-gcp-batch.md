@@ -169,6 +169,7 @@ dirty worktreeからの投入は拒否する。
 ./scripts/remote-compute run four-tile
 ./scripts/remote-compute run seven-tile
 ./scripts/remote-compute run ten-tile
+./scripts/remote-compute run thirteen-tile
 ```
 
 既定では完了まで待ち、検証済みレポートを
@@ -181,8 +182,10 @@ dirty worktreeからの投入は拒否する。
 ./scripts/remote-compute download JOB_ID
 ```
 
-4枚形は`e2-standard-2`、7枚形は`e2-standard-8`、10枚形は`e2-standard-4`で実行する。いずれもSpot限定、最大3回再試行、
-最大2時間。`--workers`の既定値はそのマシンのvCPU数で、`--workers=N`で上書きできる。Artifact
+4枚形は`e2-standard-2`、7枚形は`e2-standard-8`、10枚形は`e2-standard-4`、13枚形は`n2-standard-32`で実行する。
+いずれもSpot限定、最大3回再試行。最大実行時間はジョブ種別ごとで、4〜10枚形は2時間、13枚形は14時間。
+`--workers`の既定値はそのマシンのvCPU数で、`--workers=N`で上書きできる。13枚形では`--workers`が
+生成workerの数になり、分類workerはその半数になる。Artifact
 Registryに同じ
 commit SHAのイメージがあればdigestを再利用し、Batch jobにはtagでなくdigestを渡す。成果物は
 `gs://BUCKET/jobs/JOB_ID/`以下に保存する。download時は成功metadataとSHA-256を照合し、既存または
@@ -211,20 +214,20 @@ Mathlib cacheとLake build cacheをコンテナイメージへ含めるかは、
 | --- | ---: | ---: | ---: |
 | 4枚形 | 2 vCPU | 8 GB | 40 GB |
 | 7枚形 | 8 vCPU | 32 GB | 40 GB |
-| 10枚形 | 4 vCPU | 4 GB以上 | 32 GB以内を想定 |
-| 13枚形 | 16 vCPU | 64 GB以上 | 64 GB以内を想定 |
+| 10枚形 | 4 vCPU | 16 GB | 40 GB |
+| 13枚形 | 32 vCPU | 128 GB | 100 GB |
 
-13枚形の初回試行では、OSとコンテナの余裕を確保するため64 GBちょうどではなく、128 GB級の
-machine typeも候補にする。`/usr/bin/time -v`、生成物サイズ、worker別のメモリ使用量を記録し、
-実測後に最小構成へ下げる。
+13枚形は`CPUS_ALL_REGIONS`のクォータ上限32 vCPUに合わせて`n2-standard-32`を使う。
+`/usr/bin/time -v`、生成物サイズ、worker別のメモリ使用量を記録し、実測後に構成を見直す。
 
-現在の13枚形初期パラメーターは次である。
+Batchが投入する13枚形のパラメーターは次である。
 
 ```bash
 lake exe thirteen-tile-report-gen \
-  --generation-workers=16 \
-  --classification-workers=8 \
-  --buckets=256
+  --generation-workers=32 \
+  --classification-workers=16 \
+  --buckets=256 \
+  --work-dir=/tmp/mahjong-work-thirteen-tile/thirteen-tile-buckets
 ```
 
 分類workerはCPU数へ自動追従させない。分類workerごとにbucket内のHashMapを持つため、worker数を
@@ -257,29 +260,31 @@ Spot在庫と実測時間を見て調整する。プログラムの入力不正�
 
 VMのboot diskとlocal SSDは失われる前提にする。再試行で必要なものはCloud Storageへ保存する。
 
-### 10枚形
+### 4枚形と7枚形
 
-初期試行ではジョブ全体の再実行を許容する。実行時間または再試行コストが問題になった場合だけ、
-より細かいcheckpointを追加する。
+数分で終わるため、中断時はジョブ全体を再実行する。checkpointは持たない。
 
-### 13枚形
+### 10枚形と13枚形
 
-現在の実装は、生成完了後に
-`.lake/build/thirteen-tile-buckets/generation.done`を作り、再実行時に生成済みbucketを再利用する。
-初期試行では、生成完了後のbucketディレクトリをarchiveしてCloud Storageへ保存し、再試行時に
-復元する。
+どちらも`MahjongComputations.BucketClassification`を通じて、bucketごとの分類結果を
+`bucket-N.bin.result`としてbucketファイルの隣へ書き出す。生成フェーズは完了時に
+`generation.done`を書き、再実行時に生成済みbucketを再利用する。workerはこのディレクトリを
+`gs://BUCKET/checkpoints/JOB_TYPE/GIT_COMMIT/`へ定期的に同期し、起動時に復元する。
 
-```text
-.lake/build/thirteen-tile-buckets/
-```
+- 生成中断: 復元したbucketから生成をやり直すが、`generation.done`が無い限り再生成する。
+- 生成完了後の分類中断: 保存済みbucketを復元し、未完了bucketだけを分類し直す。
 
-生成途中のcheckpointと分類bucketごとのcheckpointは現在存在しない。そのため初期試行では、
+同期は以下の順序規則を守る。`generation.done`は、ほかの全メンバーがアップロード済みかつ
+アップロード後に変化していないと確認できたときだけ公開する。これにより、途中まで書かれたbucketに
+完了印が付くことを防ぐ。アップロード中に伸びたファイルは次回の同期で再送する。
 
-- 生成中断: 生成を最初から再実行する。
-- 生成完了後の分類中断: 保存済みbucketを復元し、分類を最初から再実行する。
+checkpointはジョブIDでなくGit commitで区切るため、同じcommitの再投入は前回の続きから始まる。
+最初から計算し直すには`--fresh`を付ける。ジョブが成功すると、そのcommitのcheckpointは削除される。
 
-とする。分類の再実行損失が大きいと実測された場合は、分類結果をbucket単位で永続化し、
-Batch Array Jobで未完了bucketだけ再実行する設計へ進む。
+再開した実行の`waitCoreCacheHits`、`waitCoreCacheMisses`、`waitCoreCacheEntries`は、
+通しで実行した場合と必ず異なる。wait-coreキャッシュはプロセス内にしか存在せず、
+再開したプロセスは復元済みbucketの分を計算しないためである。レポートのそれ以外の行は、
+bucket単位の集計をbucket順にmergeするため、通し実行と同一になる。
 
 ## Cloud Storage上の配置
 
@@ -289,12 +294,20 @@ Batch Array Jobで未完了bucketだけ再実行する設計へ進む。
 gs://BUCKET/jobs/JOB_ID/
   request.json
   metadata.json
-  checkpoints/
-    thirteen-tile-buckets.tar.zst
   logs/
     time-v.txt
   results/
-    thirteen-tile-direct-report.txt
+    thirteen-tile-report.txt
+```
+
+checkpointはジョブ間で共有するため、ジョブprefixの外に置く。
+
+```text
+gs://BUCKET/checkpoints/JOB_TYPE/GIT_COMMIT/
+  generation.done
+  bucket-0.bin
+  bucket-0.bin.result
+  ...
 ```
 
 `metadata.json`には少なくとも次を記録する。
@@ -385,14 +398,14 @@ Batch jobのservice accountには、必要なArtifact Registry imageの取得、
 
 ### Phase 2: 13枚形の資源測定
 
-- 16 vCPU、128 GB級から開始する。
-- bucket生成時間、分類時間、最大RSS、bucket archiveサイズを測る。
-- 生成済みbucketをCloud Storageから復元して分類を再開できることを確認する。
+- `n2-standard-32`、生成32 worker、分類16 worker、256 bucketから開始する。
+- bucket生成時間、分類時間、最大RSS、bucketディレクトリのサイズを測る。
+- 生成済みbucketと分類結果をCloud Storageから復元して再開できることを確認する。
 - 実測に基づきmachine type、worker数、bucket数を更新する。
 
 ### Phase 3: 必要な場合だけ細粒度化
 
-- 分類のSpot中断損失が許容できない場合、bucket別結果を永続化する。
+- bucket別結果の永続化は実装済みなので、単一ジョブの再開で足りるかを実測で判断する。
 - 独立処理可能な単位が確定した後にBatch Array Jobを導入する。
 - 単一ジョブで十分なら、Array Jobや独自schedulerは導入しない。
 
