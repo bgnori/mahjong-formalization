@@ -133,5 +133,29 @@ class SevenTileJobTests(unittest.TestCase):
         self.assertEqual(self.job_type.report_name, "seven-tile-report.txt")
 
 
+class TenTileJobTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.job_type = remote_compute.JOB_TYPES["ten-tile"]
+        self.job = job_spec("ten-tile", self.job_type.default_workers)
+
+    def test_ten_tile_uses_measured_parallel_shape(self) -> None:
+        task = self.job["taskGroups"][0]["taskSpec"]
+        policy = self.job["allocationPolicy"]["instances"][0]["policy"]
+        self.assertEqual(policy["machineType"], "e2-standard-4")
+        self.assertEqual(policy["provisioningModel"], "SPOT")
+        self.assertEqual(task["computeResource"]["cpuMilli"], 4000)
+        self.assertEqual(task["computeResource"]["memoryMib"], 12288)
+        self.assertEqual(self.job_type.default_workers, 4)
+
+    def test_ten_tile_worker_uses_report_generator(self) -> None:
+        commands = self.job["taskGroups"][0]["taskSpec"]["runnables"][0][
+            "container"
+        ]["commands"]
+        self.assertEqual(commands[1:3], ["worker", "ten-tile"])
+        self.assertEqual(commands[-1], "4")
+        self.assertEqual(self.job_type.executable, "ten-tile-report-gen")
+        self.assertEqual(self.job_type.report_name, "ten-tile-report.txt")
+
+
 if __name__ == "__main__":
     unittest.main()

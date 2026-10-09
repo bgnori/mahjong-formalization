@@ -71,6 +71,7 @@ GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。
 ```bash
 ./scripts/remote-compute run four-tile    # 2 vCPU、疎通確認
 ./scripts/remote-compute run seven-tile   # 8 vCPU、分類フェーズを並列実行
+./scripts/remote-compute run ten-tile     # 4 vCPU、10枚形レポート
 ```
 
 ジョブ種別ごとにマシンサイズが決まっており、`--workers`の既定値はそのvCPU数になる。

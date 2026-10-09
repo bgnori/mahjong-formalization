@@ -75,6 +75,7 @@ Spot VM workflow. After setting up the GCP resources described in
 ```bash
 ./scripts/remote-compute run four-tile    # 2 vCPU, connectivity check
 ./scripts/remote-compute run seven-tile   # 8 vCPU, parallel classification
+./scripts/remote-compute run ten-tile     # 4 vCPU, exhaustive ten-tile report
 ```
 
 Each job type picks its own machine size and defaults `--workers` to that machine's

@@ -62,6 +62,16 @@ JOB_TYPES: dict[str, JobType] = {
         task_memory_mib=28672,
         default_workers=8,
     ),
+    "ten-tile": JobType(
+        name="ten-tile",
+        executable="ten-tile-report-gen",
+        report_name="ten-tile-report.txt",
+        machine_type="e2-standard-4",
+        vcpu=4,
+        memory_mib=16384,
+        task_memory_mib=12288,
+        default_workers=4,
+    ),
 }
 
 

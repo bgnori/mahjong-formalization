@@ -167,6 +167,7 @@ dirty worktreeからの投入は拒否する。
 ```bash
 ./scripts/remote-compute run four-tile
 ./scripts/remote-compute run seven-tile
+./scripts/remote-compute run ten-tile
 ```
 
 既定では完了まで待ち、検証済みレポートを
@@ -179,7 +180,7 @@ dirty worktreeからの投入は拒否する。
 ./scripts/remote-compute download JOB_ID
 ```
 
-4枚形は`e2-standard-2`、7枚形は`e2-standard-8`で実行する。いずれもSpot限定、最大3回再試行、
+4枚形は`e2-standard-2`、7枚形は`e2-standard-8`、10枚形は`e2-standard-4`で実行する。いずれもSpot限定、最大3回再試行、
 最大2時間。`--workers`の既定値はそのマシンのvCPU数で、`--workers=N`で上書きできる。Artifact
 Registryに同じ
 commit SHAのイメージがあればdigestを再利用し、Batch jobにはtagでなくdigestを渡す。成果物は

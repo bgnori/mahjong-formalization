@@ -31,9 +31,10 @@ COPY scripts/remote-compute-requirements.txt ./scripts/remote-compute-requiremen
 RUN python3 -m venv /opt/venv \
     && pip install --no-cache-dir -r scripts/remote-compute-requirements.txt \
     && lake exe cache get \
-    && lake build four-tile-report-gen seven-tile-report-gen \
+    && lake build four-tile-report-gen seven-tile-report-gen ten-tile-report-gen \
     && test -x .lake/build/bin/four-tile-report-gen \
     && test -x .lake/build/bin/seven-tile-report-gen \
+    && test -x .lake/build/bin/ten-tile-report-gen \
     && chmod -R a-w /opt/mahjong \
     && useradd --uid 65532 --create-home --home-dir /home/worker worker
 
