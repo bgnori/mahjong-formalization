@@ -63,6 +63,19 @@ class RemoteComputeConfigTests(unittest.TestCase):
         with self.assertRaises(remote_compute.RemoteComputeError):
             remote_compute.parse_gs_uri("https://bucket-name/jobs/job-1")
 
+    def test_missing_image_detection(self) -> None:
+        self.assertTrue(
+            remote_compute.is_image_missing(
+                "ERROR: (gcloud.artifacts.docker.images.describe) Image not found.\n"
+            )
+        )
+        self.assertTrue(remote_compute.is_image_missing("code: NOT_FOUND"))
+        self.assertFalse(
+            remote_compute.is_image_missing(
+                "ERROR: (gcloud.artifacts.docker.images.describe) PERMISSION_DENIED"
+            )
+        )
+
     def test_cli_reports_invalid_worker_count_without_traceback(self) -> None:
         result = subprocess.run(
             [

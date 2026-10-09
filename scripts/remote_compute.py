@@ -69,6 +69,12 @@ def normalized_bucket(value: str) -> str:
     return bucket
 
 
+def is_image_missing(stderr: str) -> bool:
+    """Detect Artifact Registry's several phrasings for a missing image."""
+    lowered = stderr.lower()
+    return "image not found" in lowered or "not_found" in lowered
+
+
 def image_digest(project: str, region: str, image_uri: str) -> str:
     describe = subprocess.run(
         [
@@ -93,12 +99,16 @@ def image_digest(project: str, region: str, image_uri: str) -> str:
                 f"Artifact Registry did not return an image digest for {image_uri}."
             )
         return digest
-    if "NOT_FOUND" not in describe.stderr:
+    if not is_image_missing(describe.stderr):
         raise RemoteComputeError(
             "Could not check the compute image in Artifact Registry:\n"
             + describe.stderr.strip()
         )
 
+    print(
+        f"No compute image for this commit; building {image_uri} with Cloud Build.",
+        flush=True,
+    )
     commit = image_uri.rsplit(":", 1)[1]
     run_command(
         [
