@@ -109,7 +109,9 @@ Registryへpushする。Batch workerはApplication Default Credentialsを使っ�
 Artifact Registry、Cloud Build、Cloud Storage、Cloud Logging APIを有効にする。Artifact Registry
 repositoryとCloud Storage bucketは同じregionに作成する。Batch service accountには、対象repository
 の`roles/artifactregistry.reader`、対象bucketの`roles/storage.objectAdmin`、projectの
-`roles/logging.logWriter`を付与する。操作する利用者にはCloud Build/Artifact Registryへのpush権限、
+`roles/logging.logWriter`と`roles/batch.agentReporter`を付与する。`batch.agentReporter`がないと、
+VM上のBatch agentが状態を報告できず、ジョブが`SCHEDULED`のまま進まない。操作する利用者には
+Cloud Build/Artifact Registryへのpush権限、
 Batch jobの作成権限、およびBatch service accountの`iam.serviceAccountUser`権限が必要。
 Cloud Buildのbuild identityにも対象repositoryへのpush権限を付与する。
 
@@ -150,6 +152,9 @@ gcloud storage buckets add-iam-policy-binding "gs://$GCP_BUCKET" \
 gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
   --member="serviceAccount:$GCP_BATCH_SERVICE_ACCOUNT" \
   --role=roles/logging.logWriter
+gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
+  --member="serviceAccount:$GCP_BATCH_SERVICE_ACCOUNT" \
+  --role=roles/batch.agentReporter
 ```
 
 作業ツリーをcommitした状態で投入する。commit SHAをコンテナtagとmetadataへ記録するため、
