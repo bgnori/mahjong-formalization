@@ -64,6 +64,9 @@ lake build sevenTileReport
 `reports/seven-tile-report.json` に出力される。各レポートはバージョン付きの共通スキーマを使い、
 名前付きの集計値、分解コード別グループ、待ち牌数分布を含む。分解コードキーはJSON Viewerで
 精度が失われないよう文字列として格納する。
+Unicode牌で見やすく表示するには、[`reports/report-viewer.html`](reports/report-viewer.html)を開き、
+JSONレポートを選択またはドロップする。各集計・一覧はナビゲーションから切り替えてメイン領域に
+全幅表示し、長い一覧はページ送りで閲覧できる。
 
 ### GCP Batchでの試行
 

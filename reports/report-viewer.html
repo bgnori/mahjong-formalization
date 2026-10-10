@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>麻雀レポートビューア</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      --surface: light-dark(#fff, #20242b);
+      --surface-alt: light-dark(#f3f5f8, #292f38);
+      --text: light-dark(#20242b, #edf0f4);
+      --muted: light-dark(#5e6875, #aab4c0);
+      --border: light-dark(#d9dee7, #414955);
+      --accent: light-dark(#1769aa, #77baff);
+      --green: light-dark(#16734a, #6bd19a);
+      --red: light-dark(#a83c36, #ff8e83);
+      --tile: light-dark(#fffdf5, #f2edda);
+      --tile-text: #17202a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--surface-alt);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    main { width: calc(100% - 2rem); margin: 2rem auto 4rem; }
+    h1 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.25rem); }
+    h2 { margin: 0 0 1rem; font-size: 1.25rem; }
+    h3 { margin: 0 0 .75rem; font-size: 1.05rem; }
+    p { margin: .35rem 0; }
+    .muted, .hint { color: var(--muted); }
+    .hint { font-size: .9rem; }
+    header { margin-bottom: 1.25rem; }
+    .toolbar, .panel, .metric, details.panel {
+      border: 1px solid var(--border);
+      border-radius: .8rem;
+      background: var(--surface);
+    }
+    .toolbar { padding: 1rem; margin-bottom: 1rem; }
+    .toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+    .toolbar-row + .toolbar-row { margin-top: .75rem; }
+    button, input, select {
+      min-height: 2.65rem;
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      padding: .45rem .7rem;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    input[type="search"] { flex: 1 1 18rem; }
+    input[type="file"] { max-width: 100%; }
+    #drop-zone {
+      flex: 1 1 18rem;
+      min-height: 2.65rem;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--border);
+      border-radius: .5rem;
+      color: var(--muted);
+      padding: .4rem .7rem;
+      text-align: center;
+    }
+    #drop-zone.dragging { border-color: var(--accent); color: var(--accent); }
+    #status { min-height: 1.4em; color: var(--muted); overflow-wrap: anywhere; }
+    #status.error { color: var(--red); }
+    #report { display: grid; gap: 1rem; min-width: 0; }
+    .report-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem; }
+    .report-heading .badge {
+      border-radius: 99px;
+      background: var(--surface-alt);
+      padding: .2rem .65rem;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    .panel { padding: 1.1rem; min-width: 0; width: 100%; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: .7rem;
+    }
+    .metric { padding: .8rem; }
+    .metric-label { color: var(--muted); font-size: .85rem; }
+    .metric-value { margin-top: .2rem; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+    .split { display: grid; gap: 1rem; min-width: 0; }
+    .bar-row { display: grid; grid-template-columns: 4.5rem minmax(4rem, 1fr) 7rem; align-items: center; gap: .6rem; margin: .4rem 0; }
+    .bar-track { height: .8rem; border-radius: 99px; background: var(--surface-alt); overflow: hidden; }
+    .bar { height: 100%; min-width: 0; background: var(--accent); border-radius: inherit; }
+    .bar-count { text-align: right; font-variant-numeric: tabular-nums; }
+    .controls { display: flex; flex-wrap: wrap; gap: .65rem; margin: .5rem 0 1rem; }
+    .table-wrap { width: 100%; max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: .55rem; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    th, td { padding: .6rem .7rem; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+    th { position: sticky; top: 0; background: var(--surface-alt); z-index: 1; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
+    .tile-display { min-width: 0; }
+    .tile-row { display: flex; flex-wrap: wrap; gap: .18rem; min-width: 0; }
+    .tile {
+      display: inline-grid;
+      place-items: center;
+      width: 1.6rem;
+      height: 2rem;
+      border-radius: .25rem;
+      background: var(--tile);
+      color: var(--tile-text);
+      font-family: "Noto Sans Symbols 2", "Segoe UI Symbol", "Apple Symbols", sans-serif;
+      font-size: 1.42rem;
+      line-height: 1;
+      box-shadow: 0 1px 2px #0003;
+    }
+    .raw-tiles { color: var(--muted); font-size: .82rem; margin-top: .25rem; }
+    .code-list { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
+    .report-layout { display: grid; grid-template-columns: minmax(190px, 240px) minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .report-nav { position: sticky; top: 1rem; display: grid; gap: .4rem; padding: .7rem; border: 1px solid var(--border); border-radius: .8rem; background: var(--surface); }
+    .report-nav button { width: 100%; min-width: 0; text-align: left; overflow-wrap: anywhere; }
+    .report-nav button[aria-current="page"] { border-color: var(--accent); color: var(--accent); background: var(--surface-alt); font-weight: 650; }
+    .report-main { min-width: 0; }
+    .report-main > .panel { margin: 0; }
+    .pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem; margin-top: .8rem; }
+    .pagination-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+    .pagination button { min-height: 2.25rem; }
+    details.panel { padding: .9rem 1.1rem; }
+    details.panel > summary { cursor: pointer; font-weight: 650; }
+    details.panel[open] > summary { margin-bottom: 1rem; }
+    .empty { padding: 1rem; text-align: center; color: var(--muted); }
+    footer { color: var(--muted); font-size: .85rem; margin-top: 1.25rem; }
+    [hidden] { display: none !important; }
+    @media (max-width: 780px) {
+      main { width: calc(100% - 1rem); margin-top: 1rem; }
+      .panel { padding: .8rem; }
+      th, td { padding: .5rem; }
+      .report-layout { grid-template-columns: minmax(0, 1fr); }
+      .report-nav { position: static; display: flex; overflow-x: auto; }
+      .report-nav button { width: auto; flex: 0 0 auto; }
+      .tile { width: 1.42rem; height: 1.8rem; font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>麻雀レポートビューア</h1>
+    <p class="hint">生成されたJSONを読み込み、牌姿をUnicode牌で表示します。画像データや外部ライブラリは使用しません。</p>
+  </header>
+
+  <section class="toolbar" aria-label="レポートの読み込み">
+    <div class="toolbar-row">
+      <label for="file-input">JSONを選択:</label>
+      <input id="file-input" type="file" accept=".json,application/json">
+      <div id="drop-zone">ここにJSONファイルをドロップ</div>
+    </div>
+    <div class="toolbar-row">
+      <label for="url-input">またはURL:</label>
+      <input id="url-input" type="url" placeholder="../reports/four-tile-direct-report.json" autocomplete="url">
+      <button id="load-url" type="button">URLから読み込む</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">JSONファイルを選択するか、ここにドロップしてください。</p>
+  </section>
+
+  <div id="report" hidden></div>
+  <footer>牌姿の表記例: <span class="code-list">123m456p789s1234z</span>。字牌は東南西北白發中の順です。</footer>
+</main>
+
+<script>
+  "use strict";
+
+  const $ = (selector, parent = document) => parent.querySelector(selector);
+  const status = $("#status");
+  const reportRoot = $("#report");
+  const numberFormat = new Intl.NumberFormat("ja-JP");
+  const pageSize = 25;
+  const suitBases = { m: 0x1f007, p: 0x1f019, s: 0x1f010 };
+  const honors = [0x1f000, 0x1f001, 0x1f002, 0x1f003, 0x1f006, 0x1f005, 0x1f004];
+  const honorNames = ["東", "南", "西", "北", "白", "發", "中"];
+
+  function element(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function setStatus(message, isError = false) {
+    status.textContent = message;
+    status.classList.toggle("error", isError);
+  }
+
+  function formatNumber(value) {
+    return typeof value === "number" && Number.isFinite(value) ? numberFormat.format(value) : "—";
+  }
+
+  function tileNodes(notation) {
+    const fragment = document.createDocumentFragment();
+    if (typeof notation !== "string") return fragment;
+    let digits = "";
+    for (const char of notation) {
+      if (/\d/.test(char)) {
+        digits += char;
+        continue;
+      }
+      if (!/[mpsz]/.test(char)) {
+        digits = "";
+        continue;
+      }
+      for (const digit of digits) {
+        const rank = Number(digit);
+        let codePoint;
+        let label;
+        if (char === "z" && rank >= 1 && rank <= honors.length) {
+          codePoint = honors[rank - 1];
+          label = honorNames[rank - 1];
+        } else if (char !== "z" && rank >= 1 && rank <= 9) {
+          codePoint = suitBases[char] + rank - 1;
+          label = `${rank}${{m: "萬", p: "筒", s: "索"}[char]}`;
+        }
+        if (codePoint !== undefined) {
+          const tile = element("span", "tile", String.fromCodePoint(codePoint));
+          tile.setAttribute("aria-label", label);
+          tile.title = label;
+          fragment.append(tile);
+        }
+      }
+      digits = "";
+    }
+    return fragment;
+  }
+
+  function tileDisplay(notation) {
+    const wrapper = element("div", "tile-display");
+    wrapper.append(element("div", "tile-row"));
+    wrapper.firstChild.append(tileNodes(notation));
+    wrapper.append(element("div", "raw-tiles", notation || "—"));
+    return wrapper;
+  }
+
+  function metric(label, value) {
+    const card = element("div", "metric");
+    card.append(element("div", "metric-label", label), element("div", "metric-value", value));
+    return card;
+  }
+
+  function panel(title) {
+    const section = element("section", "panel");
+    section.append(element("h2", "", title));
+    return section;
+  }
+
+  function makeTable(headers, rows) {
+    const wrap = element("div", "table-wrap");
+    const table = element("table");
+    const thead = element("thead");
+    const headerRow = element("tr");
+    for (const header of headers) {
+      const cell = element("th", header.numeric ? "number" : "", header.label);
+      cell.scope = "col";
+      headerRow.append(cell);
+    }
+    thead.append(headerRow);
+    const tbody = element("tbody");
+    for (const row of rows) {
+      const tr = element("tr");
+      for (const cell of row) {
+        const td = element("td", cell.className || "", "");
+        if (cell.node) td.append(cell.node);
+        else td.textContent = cell.text ?? "";
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+    table.append(thead, tbody);
+    wrap.append(table);
+    if (rows.length === 0) wrap.append(element("p", "empty", "該当するデータはありません。"));
+    return wrap;
+  }
+
+  function paginatedTable(headers, rows) {
+    const container = element("div");
+    let page = 0;
+    const tableHolder = element("div");
+    const pager = element("div", "pagination");
+    const summary = element("span", "muted");
+    const controls = element("div", "pagination-controls");
+    const previous = element("button", "", "前へ");
+    previous.type = "button";
+    const pageLabel = element("span", "muted");
+    const next = element("button", "", "次へ");
+    next.type = "button";
+    const pageSizeSelect = element("select");
+    pageSizeSelect.setAttribute("aria-label", "1ページあたりの表示件数");
+    for (const size of [25, 50, 100]) {
+      const option = element("option", "", `${size}件ずつ`);
+      option.value = String(size);
+      pageSizeSelect.append(option);
+    }
+    controls.append(previous, pageLabel, next, pageSizeSelect);
+    pager.append(summary, controls);
+    const renderPage = () => {
+      const size = Number(pageSizeSelect.value);
+      const pageCount = Math.max(1, Math.ceil(rows.length / size));
+      page = Math.min(page, pageCount - 1);
+      const start = page * size;
+      tableHolder.replaceChildren(makeTable(headers, rows.slice(start, start + size)));
+      summary.textContent = rows.length
+        ? `${formatNumber(start + 1)}–${formatNumber(Math.min(start + size, rows.length))} / ${formatNumber(rows.length)} 件`
+        : "0 件";
+      pageLabel.textContent = `${formatNumber(page + 1)} / ${formatNumber(pageCount)} ページ`;
+      previous.disabled = page === 0;
+      next.disabled = page + 1 >= pageCount;
+    };
+    previous.addEventListener("click", () => { page -= 1; renderPage(); });
+    next.addEventListener("click", () => { page += 1; renderPage(); });
+    pageSizeSelect.addEventListener("change", () => { page = 0; renderPage(); });
+    container.append(tableHolder, pager);
+    renderPage();
+    return container;
+  }
+
+  function summaryMetrics(data) {
+    const summary = data.summary || {};
+    const reducibility = summary.reducibility || {};
+    const cache = summary.waitCoreCache || {};
+    const metrics = element("div", "metrics");
+    metrics.append(
+      metric("全牌姿数", formatNumber(summary.allTileShapes)),
+      metric("列挙した導出数", formatNumber(summary.enumeratedDerivations)),
+      metric("聴牌牌姿数", formatNumber(summary.tenpaiReports)),
+      metric("可約", formatNumber(reducibility.reducible)),
+      metric("既約", formatNumber(reducibility.irreducible)),
+      metric("計算時間", data.calculationElapsedMs == null
+        ? "—"
+        : `${formatNumber(data.calculationElapsedMs)} ms`),
+      metric("待ち核キャッシュ hit / miss", `${formatNumber(cache.hits)} / ${formatNumber(cache.misses)}`),
+      metric("待ち核キャッシュ件数", formatNumber(cache.entries))
+    );
+    if (reducibility.withDisjointComponentRelations !== undefined) {
+      metrics.append(metric("互いに素な部品関係", formatNumber(reducibility.withDisjointComponentRelations)));
+    }
+    if (summary.irreducibleRelationGroupCount !== undefined) {
+      metrics.append(metric("部品関係による細分類数", formatNumber(summary.irreducibleRelationGroupCount)));
+    }
+    if (summary.waitDecompositionCodesWithMultipleRelationGroups !== undefined) {
+      metrics.append(metric("細分類を持つコード群", formatNumber(summary.waitDecompositionCodesWithMultipleRelationGroups)));
+      metrics.append(metric("そのコード群に属する牌姿数", formatNumber(summary.irreducibleReportsInThoseCodeGroups)));
+    }
+    return metrics;
+  }
+
+  function distributionPanel(data) {
+    const section = panel("待ち牌の種類数ごとの聴牌牌姿数");
+    const distribution = data.waitTileCountDistribution || [];
+    const max = Math.max(1, ...distribution.map(item => item.reportCount || 0));
+    for (const item of distribution) {
+      const row = element("div", "bar-row");
+      row.append(element("span", "", `${item.waitTileKinds} 種`));
+      const track = element("div", "bar-track");
+      const bar = element("div", "bar");
+      bar.style.width = `${Math.max(0, (item.reportCount || 0) / max * 100)}%`;
+      track.append(bar);
+      row.append(track, element("span", "bar-count", formatNumber(item.reportCount)));
+      section.append(row);
+    }
+    return section;
+  }
+
+  function codeLabel(codes) {
+    return `[${Array.isArray(codes) ? codes.join(", ") : ""}]`;
+  }
+
+  function groupPanel(data) {
+    const groups = data.irreducibleGroupsByWaitDecompositionCodes || [];
+    const section = panel(`既約グループ (${formatNumber(groups.length)})`);
+    const controls = element("div", "controls");
+    const search = element("input");
+    search.type = "search";
+    search.placeholder = "牌姿・待ち・コードで絞り込み";
+    search.setAttribute("aria-label", "既約グループの検索");
+    const sort = element("select");
+    sort.setAttribute("aria-label", "既約グループの並べ替え");
+    for (const [value, label] of [["count", "件数の多い順"], ["codes", "コード順"]]) {
+      const option = element("option", "", label);
+      option.value = value;
+      sort.append(option);
+    }
+    controls.append(search, sort);
+    section.append(controls);
+    const tableHolder = element("div");
+    section.append(tableHolder);
+
+    const renderRows = () => {
+      const query = search.value.trim().toLowerCase();
+      const ordered = [...groups].sort((a, b) => sort.value === "count"
+        ? (b.count || 0) - (a.count || 0)
+        : codeLabel(a.waitDecompositionCodes).localeCompare(codeLabel(b.waitDecompositionCodes), "ja"));
+      const rows = ordered.filter(group =>
+        `${codeLabel(group.waitDecompositionCodes)} ${group.waitDecompositionCodesKey || ""} ` +
+        `${group.representativeTiles || ""} ${group.representativeWaits || ""}`.toLowerCase().includes(query)
+      ).map(group => [
+        { text: codeLabel(group.waitDecompositionCodes), className: "code-list" },
+        { text: String(group.waitDecompositionCodesKey ?? ""), className: "code-list" },
+        { text: formatNumber(group.count), className: "number" },
+        { node: tileDisplay(group.representativeTiles) },
+        { node: tileDisplay(group.representativeWaits) },
+      ]);
+      tableHolder.replaceChildren(paginatedTable([
+        {label: "待ち分解コード"},
+        {label: "コードキー"},
+        {label: "牌姿数", numeric: true},
+        {label: "代表牌姿"},
+        {label: "待ち"},
+      ], rows));
+    };
+    search.addEventListener("input", renderRows);
+    sort.addEventListener("change", renderRows);
+    renderRows();
+    return section;
+  }
+
+  function relationPanel(title, groups) {
+    const section = panel(`${title} (${formatNumber(groups.length)})`);
+    section.append(paginatedTable([
+      {label: "待ち分解コード"},
+      {label: "件数", numeric: true},
+      {label: "部品関係"},
+      {label: "代表牌姿"},
+      {label: "待ち"},
+    ], groups.map(group => [
+      {text: codeLabel(group.waitDecompositionCodes), className: "code-list"},
+      {text: formatNumber(group.count), className: "number"},
+      {text: group.componentRelations || ""},
+      {node: tileDisplay(group.representativeTiles)},
+      {node: tileDisplay(group.representativeWaits)},
+    ])));
+    return section;
+  }
+
+  function refinementsPanel(refinements) {
+    const section = panel(`部品関係による細分類 (${formatNumber(refinements.length)})`);
+    section.append(paginatedTable([
+      {label: "待ち分解コード"},
+      {label: "細分類数", numeric: true},
+    ], refinements.map(item => [
+      {text: codeLabel(item.waitDecompositionCodes), className: "code-list"},
+      {text: formatNumber(item.refinedGroupCount), className: "number"},
+    ])));
+    return section;
+  }
+
+  function shapesPanel(shapes) {
+    const section = panel(`聴牌牌姿の全件 (${formatNumber(shapes.length)})`);
+    const search = element("input");
+    search.type = "search";
+    search.placeholder = "牌姿・待ちで絞り込み";
+    search.setAttribute("aria-label", "聴牌牌姿の検索");
+    section.append(search);
+    const tableHolder = element("div");
+    section.append(tableHolder);
+    const renderRows = () => {
+      const query = search.value.trim().toLowerCase();
+      const rows = shapes.filter(shape =>
+        `${shape.tiles || ""} ${shape.waits || ""} ${shape.reducibility || ""} ${codeLabel(shape.waitDecompositionCodes)}`.toLowerCase().includes(query)
+      ).map(shape => [
+        {node: tileDisplay(shape.tiles)},
+        {node: tileDisplay(shape.waits)},
+        {text: shape.reducibility === "irreducible" ? "既約" : shape.reducibility === "reducible" ? "可約" : "—"},
+        {text: codeLabel(shape.waitDecompositionCodes), className: "code-list"},
+      ]);
+      tableHolder.replaceChildren(paginatedTable([
+        {label: "牌姿"},
+        {label: "待ち"},
+        {label: "分類"},
+        {label: "待ち分解コード"},
+      ], rows));
+    };
+    search.addEventListener("input", renderRows);
+    return section;
+  }
+
+  function render(data, sourceName) {
+    if (!data || data.reportType !== "mahjong-wait-report" || data.schemaVersion !== 1 ||
+        !Number.isInteger(data.tileCount) || !data.summary) {
+      throw new Error("対応していないJSONレポートです (reportType / schemaVersion を確認してください)。");
+    }
+    reportRoot.replaceChildren();
+    const heading = element("div", "report-heading");
+    heading.append(
+      element("h2", "", `${data.tileCount}枚形レポート`),
+      element("span", "badge", `schema v${data.schemaVersion}`),
+      element("span", "muted", sourceName || "")
+    );
+    reportRoot.append(heading);
+    const overview = panel("集計");
+    overview.append(summaryMetrics(data));
+    if (data.generation) {
+      const generation = element("p", "hint",
+        `生成worker ${formatNumber(data.generation.generationWorkers)} / ` +
+        `分類worker ${formatNumber(data.generation.classificationWorkers)} / ` +
+        `bucket ${formatNumber(data.generation.bucketCount)} / ` +
+        `生成結果再利用 ${data.generation.generationReused ? "あり" : "なし"}`);
+      overview.append(generation);
+    }
+    const sections = [overview, distributionPanel(data), groupPanel(data)];
+    if (Array.isArray(data.relationRefinements) && data.relationRefinements.length) {
+      sections.push(refinementsPanel(data.relationRefinements));
+    }
+    if (Array.isArray(data.componentRelationGroups) && data.componentRelationGroups.length) {
+      sections.push(relationPanel("待ち分解コードと部品関係の全分類", data.componentRelationGroups));
+    }
+    if (Array.isArray(data.representativeHandsInSplitGroups) && data.representativeHandsInSplitGroups.length) {
+      sections.push(relationPanel("複数の部品関係を持つグループの代表牌姿", data.representativeHandsInSplitGroups));
+    }
+    if (Array.isArray(data.tenpaiShapes)) sections.push(shapesPanel(data.tenpaiShapes));
+
+    const layout = element("div", "report-layout");
+    const navigation = element("nav", "report-nav");
+    navigation.setAttribute("aria-label", "レポートのセクション");
+    const mainArea = element("div", "report-main");
+    const navButtons = sections.map(section => {
+      const button = element("button", "", $("h2", section).textContent);
+      button.type = "button";
+      navigation.append(button);
+      return button;
+    });
+    const showSection = index => {
+      navButtons.forEach((button, buttonIndex) => {
+        if (buttonIndex === index) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      mainArea.replaceChildren(sections[index]);
+    };
+    navButtons.forEach((button, index) => button.addEventListener("click", () => showSection(index)));
+    layout.append(navigation, mainArea);
+    reportRoot.append(layout);
+    showSection(0);
+    reportRoot.hidden = false;
+  }
+
+  async function loadFile(file) {
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      render(data, file.name);
+      setStatus(`${file.name} を読み込みました。`);
+    } catch (error) {
+      setStatus(`読み込みに失敗しました: ${error.message}`, true);
+    }
+  }
+
+  $("#file-input").addEventListener("change", event => loadFile(event.target.files[0]));
+  const dropZone = $("#drop-zone");
+  for (const eventName of ["dragenter", "dragover"]) {
+    dropZone.addEventListener(eventName, event => {
+      event.preventDefault();
+      dropZone.classList.add("dragging");
+    });
+  }
+  for (const eventName of ["dragleave", "drop"]) {
+    dropZone.addEventListener(eventName, event => {
+      event.preventDefault();
+      dropZone.classList.remove("dragging");
+    });
+  }
+  dropZone.addEventListener("drop", event => loadFile(event.dataTransfer.files[0]));
+
+  async function loadUrl() {
+    const source = $("#url-input").value.trim();
+    if (!source) {
+      setStatus("JSONのURLを入力してください。", true);
+      return;
+    }
+    try {
+      const response = await fetch(source);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      render(await response.json(), source);
+      setStatus(`${source} を読み込みました。`);
+    } catch (error) {
+      setStatus(`URLから読み込めませんでした: ${error.message}。ローカルファイルは選択またはドロップしてください。`, true);
+    }
+  }
+  $("#load-url").addEventListener("click", loadUrl);
+  $("#url-input").addEventListener("keydown", event => {
+    if (event.key === "Enter") loadUrl();
+  });
+
+  const initialSource = new URLSearchParams(location.search).get("src");
+  if (initialSource) {
+    $("#url-input").value = initialSource;
+    loadUrl();
+  }
+</script>
+</body>
+</html>

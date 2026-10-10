@@ -67,6 +67,9 @@ The reports are written as JSON to `reports/four-tile-direct-report.json` and
 `reports/seven-tile-report.json`. Reports share a versioned schema with named
 summary fields, arrays of decomposition-code groups, and wait-count distributions.
 Decomposition-code keys are strings so JSON viewers preserve their exact value.
+To browse a report with Unicode Mahjong tiles, open
+[`reports/report-viewer.html`](reports/report-viewer.html) and select or drop a JSON report.
+Sections are navigated in a full-width main area, with pagination for long lists.
 
 ### GCP Batch pilot
 
