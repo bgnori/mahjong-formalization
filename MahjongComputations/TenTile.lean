@@ -33,7 +33,7 @@ structure TenTileSummary where
   waitCoreCacheMisses : Nat
   waitCoreCacheEntries : Nat
   irreducibleGroups : List WaitDecompositionCodeGroup
-  irreducibleRelationGroups : List BucketClassification.WaitDecompositionRelationGroup
+  irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
 deriving BEq, DecidableEq, Repr
 

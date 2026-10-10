@@ -13,31 +13,20 @@ open MahjongComputations.TenTile
 open MahjongComputations.ReportJson
 open Lean
 
-private def reportJson (summary : TenTileSummary) (shardIdx numShards elapsedMs : Nat) : Json :=
-  let base := report 10 elapsedMs [
+private def reportJson (summary : TenTileSummary) (elapsedMs : Nat) : Json :=
+  report 10 elapsedMs ([
     ("allTileShapes", natural summary.allTenTileShapes),
     ("enumeratedDerivations", natural summary.enumeratedDerivations),
     ("tenpaiReports", natural summary.tenpaiReports),
-    ("reducibility", object [
-      ("reducible", natural summary.reducibleReports),
-      ("irreducible", natural summary.irreducibleReports)
-    ]),
     ("waitCoreCache", object [
       ("hits", natural summary.waitCoreCacheHits),
       ("misses", natural summary.waitCoreCacheMisses),
       ("entries", natural summary.waitCoreCacheEntries)
     ])
-  ] [
-    ("shard", object [
-      ("shardIndex", natural shardIdx),
-      ("numShards", natural numShards)
-    ]),
-    ("irreducibleGroupsByWaitDecompositionCodes",
-      array (summary.irreducibleGroups.map codeGroup)),
-    ("waitTileCountDistribution",
-      waitTileCountDistribution summary.waitTileCountDistribution)
-  ]
-  base
+  ] ++ commonSummaryFields summary.irreducibleGroups summary.irreducibleRelationGroups
+      summary.reducibleReports summary.irreducibleReports summary.irreducibleDisjointReports)
+    (commonDataFields summary.irreducibleGroups summary.irreducibleRelationGroups
+      summary.waitTileCountDistribution)
 
 def parseArgs (args : List String) : Option (Nat × Nat × String) := do
   let mut shardIndex : Option Nat := none
@@ -66,7 +55,7 @@ def run (args : List String) : IO UInt32 := do
       let started ← IO.monoMsNow
       let computedSummary := summaryWithShard shardIndex numShards
       let finished ← IO.monoMsNow
-      IO.FS.writeFile path (encode (reportJson computedSummary shardIndex numShards (finished - started)))
+      IO.FS.writeFile path (encode (reportJson computedSummary (finished - started)))
       IO.println s!"wrote {path}"
       return 0
 

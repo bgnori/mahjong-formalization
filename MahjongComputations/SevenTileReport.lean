@@ -14,37 +14,20 @@ open MahjongComputations.SevenTile
 open MahjongComputations.ReportJson
 open Lean
 
-private def reportJson (summary : SevenTileSummary) (elapsedMs : Nat) : Json := Id.run do
-  let relationRefinements := summary.irreducibleGroups.map fun group =>
-    let refinedCount :=
-      (summary.irreducibleRelationClassifications.filter fun classification =>
-        classification.codes == group.codes).length
-    object [
-      ("waitDecompositionCodes", naturalArray group.codes),
-      ("refinedGroupCount", natural refinedCount)
-    ]
-  return report 7 elapsedMs [
+private def reportJson (summary : SevenTileSummary) (elapsedMs : Nat) : Json :=
+  report 7 elapsedMs ([
     ("allTileShapes", natural summary.allSevenTileShapes),
     ("enumeratedDerivations", natural summary.enumeratedDerivations),
     ("tenpaiReports", natural summary.tenpaiReports),
-    ("reducibility", object [
-      ("reducible", natural summary.reducibleReports),
-      ("irreducible", natural summary.irreducibleReports)
-    ]),
     ("waitCoreCache", object [
       ("hits", natural summary.waitCoreCacheHits),
       ("misses", natural summary.waitCoreCacheMisses),
       ("entries", natural summary.waitCoreCacheEntries)
-    ]),
-    ("irreducibleRelationGroupCount",
-      natural summary.irreducibleRelationClassifications.length)
-  ] [
-    ("irreducibleGroupsByWaitDecompositionCodes",
-      array (summary.irreducibleGroups.map codeGroup)),
-    ("relationRefinements", array relationRefinements),
-    ("waitTileCountDistribution",
-      waitTileCountDistribution summary.waitTileCountDistribution)
-  ]
+    ])]
+      ++ commonSummaryFields summary.irreducibleGroups summary.irreducibleRelationGroups
+        summary.reducibleReports summary.irreducibleReports summary.irreducibleDisjointReports)
+    (commonDataFields summary.irreducibleGroups summary.irreducibleRelationGroups
+      summary.waitTileCountDistribution)
 
 def run (args : List String) : IO UInt32 := do
   let (workers, outputPath) ←

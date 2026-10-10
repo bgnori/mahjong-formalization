@@ -35,6 +35,8 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
+  let relationClassification := waitDecompositionRelationClassification completions
+  let relationKey := waitDecompositionRelationKey relationClassification
   let (reducible, waitCoreCache) :=
     canReduceMentsuPreservingWaitCoresCached report.tiles completions state.waitCoreCache
   let summary :=
@@ -47,7 +49,12 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   else
     { summary with
       irreducibleReports := summary.irreducibleReports + 1
-      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups }
+      irreducibleDisjointReports := summary.irreducibleDisjointReports +
+        if hasDisjointComponentRelation relationClassification then 1 else 0
+      irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
+      irreducibleRelationGroups := addWaitDecompositionRelationGroup codes relationKey
+        report.tiles waits (waitDecompositionRelationDescription relationClassification)
+        summary.irreducibleRelationGroups }
   { summary, waitCoreCache }
 
 @[noinline] private def allTenTileShapeCountLegacy (tileCount : Nat) : Nat :=

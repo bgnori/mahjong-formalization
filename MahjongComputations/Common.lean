@@ -7,6 +7,8 @@ import Std.Data.HashMap
 
 namespace MahjongComputations
 
+open WaitDecompositionCode
+
 /-- 牌種ごとの枚数を、物理上限より1大きい基数で符号化した多重集合キー。 -/
 def tileMultisetKey (tiles : List Tile) : Nat :=
   Tile.all.foldl (fun key tile => key * (copiesPerTile + 1) + tiles.count tile) 0
@@ -278,6 +280,86 @@ def groupByWaitDecompositionCodes {α : Type}
     (fun groups value => addWaitDecompositionCodeGroup
       (codes value) (tiles value) (waits value) groups)
     []
+
+/-- Irreducible hands grouped by both their decomposition codes and component relations. -/
+structure WaitDecompositionRelationGroup where
+  codes : List Nat
+  relationKey : List Nat
+  count : Nat
+  representativeTiles : List Tile
+  representativeWaits : List Tile
+  relationDescription : String
+deriving BEq, DecidableEq, Repr
+
+private def componentRelationKey (relation : ComponentRelation) : Nat :=
+  let tileRelationKey := match relation.tileRelation with
+    | .overlapping => 0
+    | .disjoint => 1
+    | .invalidComponents => 2
+  (WaitComponentKind.all.idxOf relation.firstKind * WaitComponentKind.count +
+      WaitComponentKind.all.idxOf relation.secondKind) * 3 + tileRelationKey
+
+/-- Stable key for a complete wait-decomposition relation classification. -/
+def waitDecompositionRelationKey
+    (classification : WaitDecompositionRelationClassification) : List Nat :=
+  [classification.signatures.length] ++
+    classification.signatures.flatMap fun signature =>
+      [signature.code, signature.relations.length] ++
+        signature.relations.map componentRelationKey
+
+private def componentKindName : WaitComponentKind → String
+  | .tanki => "tanki"
+  | .toitsu => "toitsu"
+  | .ryanmen => "ryanmen"
+  | .kanchan => "kanchan"
+  | .penchan => "penchan"
+  | .shuntsu => "shuntsu"
+  | .koutsu => "koutsu"
+
+/-- Human-readable per-code component relations, including whether tiles are disjoint. -/
+def waitDecompositionRelationDescription
+    (classification : WaitDecompositionRelationClassification) : String :=
+  String.intercalate " | " <| classification.signatures.map fun signature =>
+    s!"{signature.code}: " ++ String.intercalate ", " (signature.relations.map fun relation =>
+      let tileRelation := match relation.tileRelation with
+        | .overlapping => "overlapping"
+        | .disjoint => "disjoint"
+        | .invalidComponents => "invalid"
+      s!"{componentKindName relation.firstKind}-{componentKindName relation.secondKind}={tileRelation}")
+
+/-- Whether a classification contains at least one disjoint component relation. -/
+def hasDisjointComponentRelation
+    (classification : WaitDecompositionRelationClassification) : Bool :=
+  classification.signatures.any fun signature =>
+    signature.relations.any fun relation => relation.tileRelation == .disjoint
+
+/-- Add one hand to the group with matching codes and component-relation key. -/
+def addWaitDecompositionRelationGroup (codes relationKey : List Nat)
+    (tiles waits : List Tile) (description : String) :
+    List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
+  | [] => [{
+      codes, relationKey, count := 1, representativeTiles := tiles,
+      representativeWaits := waits, relationDescription := description
+    }]
+  | group :: rest =>
+      if group.codes == codes && group.relationKey == relationKey then
+        { group with count := group.count + 1 } :: rest
+      else
+        group :: addWaitDecompositionRelationGroup codes relationKey tiles waits description rest
+
+/-- Merge relation groups while retaining the first representative of each group. -/
+def mergeWaitDecompositionRelationGroups
+    (groups additions : List WaitDecompositionRelationGroup) :
+    List WaitDecompositionRelationGroup :=
+  additions.foldl (fun merged addition =>
+    let rec add : List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
+      | [] => [addition]
+      | group :: rest =>
+          if group.codes == addition.codes && group.relationKey == addition.relationKey then
+            { group with count := group.count + addition.count } :: rest
+          else
+            group :: add rest
+    add merged) groups
 
 /-- 自然数キーの度数表へ1件加える。 -/
 def incrementCount (key : Nat) : List (Nat × Nat) → List (Nat × Nat)

@@ -20,16 +20,6 @@ open WaitCompletionFinder
 open WaitDecompositionCode
 open MahjongComputations
 
-/-- Counts of irreducible hands with the same component-relation classification. -/
-structure WaitDecompositionRelationGroup where
-  codes : List Nat
-  relationKey : List Nat
-  count : Nat
-  representativeTiles : List Tile
-  representativeWaits : List Tile
-  relationDescription : String
-deriving BEq, DecidableEq, Repr
-
 /-- Classification totals contributed by one or more buckets. -/
 structure BucketSummary where
   tenpaiReports : Nat
@@ -72,73 +62,6 @@ private def addDistribution
       else
         count :: addDistribution rest addition
 
-private def componentRelationKey (relation : ComponentRelation) : Nat :=
-  let tileRelationKey := match relation.tileRelation with
-    | .overlapping => 0
-    | .disjoint => 1
-    | .invalidComponents => 2
-  (WaitComponentKind.all.idxOf relation.firstKind * WaitComponentKind.count +
-      WaitComponentKind.all.idxOf relation.secondKind) * 3 + tileRelationKey
-
-private def relationClassificationKey
-    (classification : WaitDecompositionRelationClassification) : List Nat :=
-  [classification.signatures.length] ++
-    classification.signatures.flatMap fun signature =>
-      [signature.code, signature.relations.length] ++
-        signature.relations.map componentRelationKey
-
-private def componentKindName : WaitComponentKind → String
-  | .tanki => "tanki"
-  | .toitsu => "toitsu"
-  | .ryanmen => "ryanmen"
-  | .kanchan => "kanchan"
-  | .penchan => "penchan"
-  | .shuntsu => "shuntsu"
-  | .koutsu => "koutsu"
-
-private def relationDescription
-    (classification : WaitDecompositionRelationClassification) : String :=
-  String.intercalate " | " <| classification.signatures.map fun signature =>
-    s!"{signature.code}: " ++ String.intercalate ", " (signature.relations.map fun relation =>
-      let tileRelation := match relation.tileRelation with
-        | .overlapping => "overlapping"
-        | .disjoint => "disjoint"
-        | .invalidComponents => "invalid"
-      s!"{componentKindName relation.firstKind}-{componentKindName relation.secondKind}={tileRelation}")
-
-private def hasDisjointRelation
-    (classification : WaitDecompositionRelationClassification) : Bool :=
-  classification.signatures.any fun signature =>
-    signature.relations.any fun relation => relation.tileRelation == .disjoint
-
-private def addRelationGroup (codes : List Nat) (relationKey : List Nat)
-    (tiles waits : List Tile) (description : String) :
-    List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
-  | [] => [{
-      codes, relationKey, count := 1, representativeTiles := tiles,
-      representativeWaits := waits, relationDescription := description
-    }]
-  | group :: rest =>
-      if group.codes == codes && group.relationKey == relationKey then
-        { group with count := group.count + 1 } :: rest
-      else
-        group :: addRelationGroup codes relationKey tiles waits description rest
-
-private def addRelationGroupCount (addition : WaitDecompositionRelationGroup) :
-    List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
-  | [] => [addition]
-  | group :: rest =>
-      if group.codes == addition.codes && group.relationKey == addition.relationKey then
-        { group with count := group.count + addition.count } :: rest
-      else
-        group :: addRelationGroupCount addition rest
-
-private def mergeRelationGroups
-    (groups : List WaitDecompositionRelationGroup)
-    (additions : List WaitDecompositionRelationGroup) :
-    List WaitDecompositionRelationGroup :=
-  additions.foldl (fun merged addition => addRelationGroupCount addition merged) groups
-
 /-- Combine two summaries, keeping the first occurrence order of groups and counts. -/
 def merge (first second : BucketSummary) : BucketSummary :=
   { tenpaiReports := first.tenpaiReports + second.tenpaiReports
@@ -148,7 +71,8 @@ def merge (first second : BucketSummary) : BucketSummary :=
       first.irreducibleDisjointReports + second.irreducibleDisjointReports
     irreducibleGroups := second.irreducibleGroups.foldl addCodeGroup first.irreducibleGroups
     irreducibleRelationGroups :=
-      mergeRelationGroups first.irreducibleRelationGroups second.irreducibleRelationGroups
+      mergeWaitDecompositionRelationGroups first.irreducibleRelationGroups
+        second.irreducibleRelationGroups
     waitTileCountDistribution :=
       second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
 
@@ -159,8 +83,7 @@ def addShapeReport (cache : SharedWaitCoreCache)
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
   let relationClassification := waitDecompositionRelationClassification completions
-  let relationKey := relationClassificationKey relationClassification
-  let relationDescription := relationDescription relationClassification
+  let relationKey := waitDecompositionRelationKey relationClassification
   let reducible ← liftM <| canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
   let summary :=
     { summary with
@@ -173,11 +96,12 @@ def addShapeReport (cache : SharedWaitCoreCache)
       irreducibleReports := summary.irreducibleReports + 1
       irreducibleDisjointReports :=
         summary.irreducibleDisjointReports +
-          if hasDisjointRelation relationClassification then 1 else 0
+          if hasDisjointComponentRelation relationClassification then 1 else 0
       irreducibleGroups :=
         addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
       irreducibleRelationGroups :=
-        addRelationGroup codes relationKey report.tiles waits relationDescription
+        addWaitDecompositionRelationGroup codes relationKey report.tiles waits
+          (waitDecompositionRelationDescription relationClassification)
           summary.irreducibleRelationGroups }
 
 private def formatMagic : String := "MJWC-CLASSIFICATION-3"

@@ -341,7 +341,8 @@
       metric("待ち核キャッシュ件数", formatNumber(cache.entries))
     );
     if (reducibility.withDisjointComponentRelations !== undefined) {
-      metrics.append(metric("互いに素な部品関係", formatNumber(reducibility.withDisjointComponentRelations)));
+      metrics.append(metric("互いに素な部品関係を含む既約牌姿",
+        formatNumber(reducibility.withDisjointComponentRelations)));
     }
     if (summary.irreducibleRelationGroupCount !== undefined) {
       metrics.append(metric("部品関係による細分類数", formatNumber(summary.irreducibleRelationGroupCount)));
@@ -484,7 +485,7 @@
   }
 
   function render(data, sourceName) {
-    if (!data || data.reportType !== "mahjong-wait-report" || data.schemaVersion !== 1 ||
+    if (!data || data.reportType !== "mahjong-wait-report" || ![1, 2].includes(data.schemaVersion) ||
         !Number.isInteger(data.tileCount) || !data.summary) {
       throw new Error("対応していないJSONレポートです (reportType / schemaVersion を確認してください)。");
     }
@@ -506,17 +507,18 @@
         `生成結果再利用 ${data.generation.generationReused ? "あり" : "なし"}`);
       overview.append(generation);
     }
-    const sections = [overview, distributionPanel(data), groupPanel(data)];
-    if (Array.isArray(data.relationRefinements) && data.relationRefinements.length) {
-      sections.push(refinementsPanel(data.relationRefinements));
+    const sections = [
+      overview,
+      distributionPanel(data),
+      groupPanel(data),
+      refinementsPanel(data.relationRefinements || []),
+      relationPanel("待ち分解コードと部品関係の全分類", data.componentRelationGroups || []),
+      relationPanel("複数の部品関係を持つグループの代表牌姿",
+        data.representativeHandsInSplitGroups || []),
+    ];
+    if (data.schemaVersion < 2 && Array.isArray(data.tenpaiShapes)) {
+      sections.push(shapesPanel(data.tenpaiShapes));
     }
-    if (Array.isArray(data.componentRelationGroups) && data.componentRelationGroups.length) {
-      sections.push(relationPanel("待ち分解コードと部品関係の全分類", data.componentRelationGroups));
-    }
-    if (Array.isArray(data.representativeHandsInSplitGroups) && data.representativeHandsInSplitGroups.length) {
-      sections.push(relationPanel("複数の部品関係を持つグループの代表牌姿", data.representativeHandsInSplitGroups));
-    }
-    if (Array.isArray(data.tenpaiShapes)) sections.push(shapesPanel(data.tenpaiShapes));
 
     const layout = element("div", "report-layout");
     const navigation = element("nav", "report-nav");

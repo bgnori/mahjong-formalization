@@ -60,34 +60,21 @@ private def parseArgs (args : List String) : IO Options := do
       options := { options with outputPath := arg }
   return options
 
-private def reportJson (options : Options) (result : ThirteenTileRunResult)
-    (elapsedMs : Nat) : Json :=
+private def reportJson (result : ThirteenTileRunResult) (elapsedMs : Nat) : Json :=
   let summary := result.summary
-  report 13 elapsedMs [
+  report 13 elapsedMs ([
     ("allTileShapes", natural summary.allThirteenTileShapes),
     ("enumeratedDerivations", natural summary.enumeratedDerivations),
     ("tenpaiReports", natural summary.tenpaiReports),
-    ("reducibility", object [
-      ("reducible", natural summary.reducibleReports),
-      ("irreducible", natural summary.irreducibleReports)
-    ]),
     ("waitCoreCache", object [
       ("hits", natural summary.waitCoreCacheHits),
       ("misses", natural summary.waitCoreCacheMisses),
       ("entries", natural summary.waitCoreCacheEntries)
     ])
-  ] [
-    ("generation", object [
-      ("generationWorkers", natural options.generationWorkers),
-      ("classificationWorkers", natural options.classificationWorkers),
-      ("bucketCount", natural options.bucketCount),
-      ("generationReused", toJson result.generationReused)
-    ]),
-    ("irreducibleGroupsByWaitDecompositionCodes",
-      array (summary.irreducibleGroups.map codeGroup)),
-    ("waitTileCountDistribution",
-      waitTileCountDistribution summary.waitTileCountDistribution)
-  ]
+  ] ++ commonSummaryFields summary.irreducibleGroups summary.irreducibleRelationGroups
+      summary.reducibleReports summary.irreducibleReports summary.irreducibleDisjointReports)
+    (commonDataFields summary.irreducibleGroups summary.irreducibleRelationGroups
+      summary.waitTileCountDistribution)
 
 def run (args : List String) : IO UInt32 := do
   let options ← parseArgs args
@@ -98,7 +85,7 @@ def run (args : List String) : IO UInt32 := do
   let result ← summaryParallel options.generationWorkers options.classificationWorkers
     options.workDirectory options.bucketCount
   let finished ← IO.monoMsNow
-  IO.FS.writeFile path (encode (reportJson options result (finished - started)))
+  IO.FS.writeFile path (encode (reportJson result (finished - started)))
   IO.println s!"wrote {path}"
   return 0
 

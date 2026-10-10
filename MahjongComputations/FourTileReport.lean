@@ -15,10 +15,6 @@ open MahjongComputations.ReportJson
 open Lean
 open WaitDecompositionCode
 
-private def reducibilityCount (reports : List FourTileShapeReport)
-    (reducibility : WaitReducibility) : Nat :=
-  (reports.filter fun report => report.reducibility == some reducibility).length
-
 private def reportsByReducibility (reports : List FourTileShapeReport)
     (reducibility : WaitReducibility) : List FourTileShapeReport :=
   reports.filter fun report => report.reducibility == some reducibility
@@ -29,52 +25,27 @@ private def reportJson
   let irreducibleReports := reportsByReducibility directReports .irreducible
   let irreducibleGroups := groupByWaitDecompositionCodes
     (·.waitDecompositionCodes) (·.tiles) (·.waits) irreducibleReports
-  let irreducibleRelationGroupCount :=
-    (irreducibleReports.map (·.relationClassification)).eraseDups.length
-  let relationRefinements := irreducibleGroups.map fun group =>
-    let refinedCount :=
-      (irreducibleReports
-        |>.filter (fun report => report.waitDecompositionCodes == group.codes)
-        |>.map (·.relationClassification)
-        |>.eraseDups).length
-    object [
-      ("waitDecompositionCodes", naturalArray group.codes),
-      ("refinedGroupCount", natural refinedCount)
-    ]
-  let waitTileCounts := countOccurrences (directReports.map (·.waits.length))
-  let shapeReports := directReports.map fun shape =>
-    object [
-      ("tiles", string (formatTiles shape.tiles)),
-      ("waits", string (formatTiles shape.waits)),
-      ("reducibility", match shape.reducibility with
-        | none => Json.null
-        | some .reducible => string "reducible"
-        | some .irreducible => string "irreducible"),
-      ("waitDecompositionCodes", naturalArray shape.waitDecompositionCodes),
-      ("waitDecompositionCodesKey",
-        string (toString (waitDecompositionCodesKey shape.waitDecompositionCodes)))
-    ]
-  return report 4 elapsedMs [
+  let irreducibleRelationGroups := irreducibleReports.foldl (fun groups shape =>
+    addWaitDecompositionRelationGroup shape.waitDecompositionCodes
+      (waitDecompositionRelationKey shape.relationClassification)
+      shape.tiles shape.waits
+      (waitDecompositionRelationDescription shape.relationClassification) groups) []
+  let disjointReports := (irreducibleReports.filter fun shape =>
+    hasDisjointComponentRelation shape.relationClassification).length
+  let commonSummary := commonSummaryFields irreducibleGroups irreducibleRelationGroups
+    (reportsByReducibility directReports .reducible).length irreducibleReports.length disjointReports
+  let commonData := commonDataFields irreducibleGroups irreducibleRelationGroups
+    (countOccurrences (directReports.map (·.waits.length)))
+  return report 4 elapsedMs ([
     ("allTileShapes", natural allFourTileShapes.length),
     ("enumeratedDerivations", natural directDerivationCount),
     ("tenpaiReports", natural directReports.length),
-    ("reducibility", object [
-      ("reducible", natural (reducibilityCount directReports .reducible)),
-      ("irreducible", natural (reducibilityCount directReports .irreducible))
-    ]),
-    ("irreducibleRelationGroupCount", natural irreducibleRelationGroupCount),
     ("waitCoreCache", object [
       ("hits", natural cache.hits),
       ("misses", natural cache.misses),
       ("entries", natural cache.entries)
     ])
-  ] [
-    ("irreducibleGroupsByWaitDecompositionCodes",
-      array (irreducibleGroups.map codeGroup)),
-    ("relationRefinements", array relationRefinements),
-    ("waitTileCountDistribution", waitTileCountDistribution waitTileCounts),
-    ("tenpaiShapes", array shapeReports)
-  ]
+  ] ++ commonSummary) (commonData)
 
 def run (args : List String) : IO UInt32 := do
   let (workers, outputPath) ←

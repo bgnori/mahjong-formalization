@@ -28,10 +28,12 @@ structure ThirteenTileSummary where
   tenpaiReports : Nat
   reducibleReports : Nat
   irreducibleReports : Nat
+  irreducibleDisjointReports : Nat
   waitCoreCacheHits : Nat
   waitCoreCacheMisses : Nat
   waitCoreCacheEntries : Nat
   irreducibleGroups : List WaitDecompositionCodeGroup
+  irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
 deriving BEq, DecidableEq, Repr
 
@@ -41,10 +43,12 @@ private def emptySummary : ThirteenTileSummary :=
     tenpaiReports := 0
     reducibleReports := 0
     irreducibleReports := 0
+    irreducibleDisjointReports := 0
     waitCoreCacheHits := 0
     waitCoreCacheMisses := 0
     waitCoreCacheEntries := 0
     irreducibleGroups := []
+    irreducibleRelationGroups := []
     waitTileCountDistribution := [] }
 
 private def allThirteenTileShapeCount : Nat := 98521596000
@@ -95,10 +99,12 @@ def summaryParallel (generationWorkers classificationWorkers : Nat)
       tenpaiReports := computed.tenpaiReports
       reducibleReports := computed.reducibleReports
       irreducibleReports := computed.irreducibleReports
+      irreducibleDisjointReports := computed.irreducibleDisjointReports
       waitCoreCacheHits := stats.hits
       waitCoreCacheMisses := stats.misses
       waitCoreCacheEntries := stats.entries
       irreducibleGroups := computed.irreducibleGroups
+      irreducibleRelationGroups := computed.irreducibleRelationGroups
       waitTileCountDistribution := computed.waitTileCountDistribution }
     generationReused
   }

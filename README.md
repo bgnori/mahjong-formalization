@@ -63,10 +63,13 @@ lake build fourTileReport
 lake build sevenTileReport
 ```
 
-The reports are written as JSON to `reports/four-tile-direct-report.json` and
-`reports/seven-tile-report.json`. Reports share a versioned schema with named
-summary fields, arrays of decomposition-code groups, and wait-count distributions.
-Decomposition-code keys are strings so JSON viewers preserve their exact value.
+Reports are written as JSON. Four-, seven-, ten-, and thirteen-tile reports use
+the same v2 schema with named summary fields, decomposition-code groups,
+component-relation refinements, and wait-count distributions. Each relation
+refinement includes its component relationships (including disjointness) and a
+representative hand and waits, so examples of one code group splitting into
+different relations can be compared. Decomposition-code keys are strings so
+JSON viewers preserve their exact value.
 To browse a report with Unicode Mahjong tiles, open
 [`reports/report-viewer.html`](reports/report-viewer.html) and select or drop a JSON report.
 Sections are navigated in a full-width main area, with pagination for long lists.

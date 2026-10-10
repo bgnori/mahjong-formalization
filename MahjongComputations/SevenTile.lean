@@ -25,11 +25,12 @@ structure SevenTileSummary where
   tenpaiReports : Nat
   reducibleReports : Nat
   irreducibleReports : Nat
+  irreducibleDisjointReports : Nat
   waitCoreCacheHits : Nat
   waitCoreCacheMisses : Nat
   waitCoreCacheEntries : Nat
   irreducibleGroups : List WaitDecompositionCodeGroup
-  irreducibleRelationClassifications : List WaitDecompositionRelationClassification
+  irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
 deriving BEq, DecidableEq, Repr
 
@@ -39,11 +40,12 @@ private def emptySummary : SevenTileSummary :=
     tenpaiReports := 0
     reducibleReports := 0
     irreducibleReports := 0
+    irreducibleDisjointReports := 0
     waitCoreCacheHits := 0
     waitCoreCacheMisses := 0
     waitCoreCacheEntries := 0
     irreducibleGroups := []
-    irreducibleRelationClassifications := []
+    irreducibleRelationGroups := []
     waitTileCountDistribution := [] }
 
 private def allSevenTileShapeCount (_ : Unit) : Nat :=
@@ -53,18 +55,13 @@ private structure ComputationState where
   summary : SevenTileSummary
   waitCoreCache : WaitCoreCache
 
-private def insertRelationClassification
-    (classification : WaitDecompositionRelationClassification)
-    (classifications : List WaitDecompositionRelationClassification) :
-    List WaitDecompositionRelationClassification :=
-  if classifications.contains classification then classifications else classification :: classifications
-
 private def addShapeReport (report : WaitCompletionGroup) (state : ComputationState) :
     ComputationState :=
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
   let relationClassification := waitDecompositionRelationClassification completions
+  let relationKey := waitDecompositionRelationKey relationClassification
   let (reducible, waitCoreCache) :=
     canReduceMentsuPreservingWaitCoresCached report.tiles completions state.waitCoreCache
   let summary :=
@@ -77,10 +74,12 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   else
     { summary with
       irreducibleReports := summary.irreducibleReports + 1
+      irreducibleDisjointReports := summary.irreducibleDisjointReports +
+        if hasDisjointComponentRelation relationClassification then 1 else 0
       irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
-      irreducibleRelationClassifications :=
-        insertRelationClassification relationClassification
-          summary.irreducibleRelationClassifications }
+      irreducibleRelationGroups := addWaitDecompositionRelationGroup codes relationKey
+        report.tiles waits (waitDecompositionRelationDescription relationClassification)
+        summary.irreducibleRelationGroups }
   { summary, waitCoreCache }
 
 private def addShapeReportShared (cache : SharedWaitCoreCache)
@@ -89,6 +88,7 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
   let relationClassification := waitDecompositionRelationClassification completions
+  let relationKey := waitDecompositionRelationKey relationClassification
   let reducible ← canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
   let summary :=
     { summary with
@@ -99,10 +99,12 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
   else
     return { summary with
       irreducibleReports := summary.irreducibleReports + 1
+      irreducibleDisjointReports := summary.irreducibleDisjointReports +
+        if hasDisjointComponentRelation relationClassification then 1 else 0
       irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
-      irreducibleRelationClassifications :=
-        insertRelationClassification relationClassification
-          summary.irreducibleRelationClassifications }
+      irreducibleRelationGroups := addWaitDecompositionRelationGroup codes relationKey
+        report.tiles waits (waitDecompositionRelationDescription relationClassification)
+        summary.irreducibleRelationGroups }
 
 private def addCodeGroup
     (groups : List WaitDecompositionCodeGroup) (addition : WaitDecompositionCodeGroup) :
@@ -130,12 +132,12 @@ private def mergeSummary (first second : SevenTileSummary) : SevenTileSummary :=
     tenpaiReports := first.tenpaiReports + second.tenpaiReports
     reducibleReports := first.reducibleReports + second.reducibleReports
     irreducibleReports := first.irreducibleReports + second.irreducibleReports
+    irreducibleDisjointReports :=
+      first.irreducibleDisjointReports + second.irreducibleDisjointReports
     irreducibleGroups := second.irreducibleGroups.foldl addCodeGroup first.irreducibleGroups
-    irreducibleRelationClassifications :=
-      second.irreducibleRelationClassifications.foldl
-        (fun classifications classification =>
-          insertRelationClassification classification classifications)
-        first.irreducibleRelationClassifications
+    irreducibleRelationGroups :=
+      mergeWaitDecompositionRelationGroups first.irreducibleRelationGroups
+        second.irreducibleRelationGroups
     waitTileCountDistribution :=
       second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
 

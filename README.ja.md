@@ -60,10 +60,11 @@ lake build fourTileReport
 lake build sevenTileReport
 ```
 
-レポートはJSON形式で、それぞれ `reports/four-tile-direct-report.json` と
-`reports/seven-tile-report.json` に出力される。各レポートはバージョン付きの共通スキーマを使い、
-名前付きの集計値、分解コード別グループ、待ち牌数分布を含む。分解コードキーはJSON Viewerで
-精度が失われないよう文字列として格納する。
+レポートはJSON形式で出力される。4・7・10・13枚形は同じv2スキーマを使い、
+名前付きの集計値、分解コード別グループ、部品関係による細分類、待ち牌数分布を含む。
+各細分類には部品関係（Disjointかどうか）と代表牌姿・待ちが含まれるため、同じ分解コードが
+異なる部品関係へ分かれる実例を比較できる。分解コードキーはJSON Viewerで精度が失われないよう
+文字列として格納する。
 Unicode牌で見やすく表示するには、[`reports/report-viewer.html`](reports/report-viewer.html)を開き、
 JSONレポートを選択またはドロップする。各集計・一覧はナビゲーションから切り替えてメイン領域に
 全幅表示し、長い一覧はページ送りで閲覧できる。
