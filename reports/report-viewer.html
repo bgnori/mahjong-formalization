@@ -119,6 +119,11 @@
       line-height: 1;
       box-shadow: 0 1px 2px #0003;
     }
+    .tile-display.prominent .tile {
+      width: 3.2rem;
+      height: 4rem;
+      font-size: 2.84rem;
+    }
     .raw-tiles { color: var(--muted); font-size: .82rem; margin-top: .25rem; }
     .code-list { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
     .report-layout { display: grid; grid-template-columns: minmax(190px, 240px) minmax(0, 1fr); gap: 1rem; align-items: start; }
@@ -144,6 +149,11 @@
       .report-nav { position: static; display: flex; overflow-x: auto; }
       .report-nav button { width: auto; flex: 0 0 auto; }
       .tile { width: 1.42rem; height: 1.8rem; font-size: 1.25rem; }
+      .tile-display.prominent .tile {
+        width: 2.84rem;
+        height: 3.6rem;
+        font-size: 2.5rem;
+      }
     }
   </style>
 </head>
@@ -236,8 +246,8 @@
     return fragment;
   }
 
-  function tileDisplay(notation) {
-    const wrapper = element("div", "tile-display");
+  function tileDisplay(notation, prominent = false) {
+    const wrapper = element("div", prominent ? "tile-display prominent" : "tile-display");
     wrapper.append(element("div", "tile-row"));
     wrapper.firstChild.append(tileNodes(notation));
     wrapper.append(element("div", "raw-tiles", notation || "—"));
@@ -455,8 +465,8 @@
         { text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list" },
         { text: String(group.waitDecompositionCodesKey ?? ""), sortValue: group.waitDecompositionCodesKey, className: "code-list" },
         { text: formatNumber(group.count), sortValue: group.count, className: "number" },
-        { node: tileDisplay(group.representativeTiles), sortValue: group.representativeTiles },
-        { node: tileDisplay(group.representativeWaits), sortValue: group.representativeWaits },
+        { node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles },
+        { node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits },
       ]);
       tableHolder.replaceChildren(paginatedTable([
         {label: "待ち分解コード"},
@@ -483,8 +493,8 @@
       {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
       {text: formatNumber(group.count), sortValue: group.count, className: "number"},
       {text: group.componentRelations || "", sortValue: group.componentRelations || ""},
-      {node: tileDisplay(group.representativeTiles), sortValue: group.representativeTiles},
-      {node: tileDisplay(group.representativeWaits), sortValue: group.representativeWaits},
+      {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
+      {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
     ])));
     return section;
   }
