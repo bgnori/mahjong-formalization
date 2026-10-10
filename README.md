@@ -82,6 +82,8 @@ in [`docs/remote-compute-gcp-batch.md`](docs/remote-compute-gcp-batch.md), run:
 Each job type picks its own machine size and defaults `--workers` to that machine's
 vCPU count. Use `--detach` to submit without waiting; `status JOB_ID` checks progress
 and `download JOB_ID` retrieves a successful report without overwriting existing files.
+The thirteen-tile report finishes in roughly 7 hours 10 minutes on an `n2-standard-32`
+Spot VM (measured 2026-10-09).
 
 The ten- and thirteen-tile reports stream their external buckets and per-bucket
 classification results to Cloud Storage, so a Spot preemption resumes from the last

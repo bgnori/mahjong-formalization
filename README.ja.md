@@ -78,6 +78,7 @@ GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。
 ジョブ種別ごとにマシンサイズが決まっており、`--workers`の既定値はそのvCPU数になる。
 `--detach`を指定すると完了を待たずに投入できる。`status JOB_ID`で状態を確認し、
 `download JOB_ID`で成功レポートを取得する。既存ファイルは上書きしない。
+13枚形は`n2-standard-32`のSpot VMで約7時間10分で完走する（2026-10-09実測）。
 
 10枚形と13枚形は、外部bucketとbucketごとの分類結果をCloud Storageへ同期する。Spot中断後は
 最後のcheckpointから再開し、最初からやり直さない。`--fresh`を付けると保存済みcheckpointを

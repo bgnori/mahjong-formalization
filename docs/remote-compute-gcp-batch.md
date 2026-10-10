@@ -1,6 +1,6 @@
 # GCP Batch + Spot VM によるリモート計算方針
 
-状態: 4枚形・7枚形・10枚形のGCP Batch実行確認済み、13枚形は実行中
+状態: 4枚形・7枚形・10枚形・13枚形のGCP Batch実行確認済み
 採用日: 2026-10-09
 
 この文書は、10枚形・13枚形などの重いレポート生成を Google Cloud Batch の Spot VM で実行するための
@@ -11,7 +11,8 @@
 バイト単位で一致することを確認済み。7枚形レポートも`e2-standard-8`のSpot VMで完走し、
 CPU使用率193%で並列動作することを確認済み。10枚形も4 vCPUのSpot VMで完走し、
 ローカル結果との一致を確認済み。10枚形と13枚形はbucket単位のcheckpointをCloud Storageへ
-同期して中断から再開できる。13枚形は`n2-standard-32`で投入済みで、完走結果はまだ出ていない。
+同期して中断から再開できる。13枚形も`n2-standard-32`のSpot VMで7時間11分かけて完走し、
+ローカル結果との一致を確認済み。
 実測結果に応じて、machine type、リージョン、再試行回数を更新する。
 
 ## 目的
@@ -411,6 +412,21 @@ checkpoint機構を追加した後の再実行（2026-10-09、`8b1db16`）:
 - bucket生成時間、分類時間、最大RSS、bucketディレクトリのサイズを測る。
 - 生成済みbucketと分類結果をCloud Storageから復元して再開できることを確認する。
 - 実測に基づきmachine type、worker数、bucket数を更新する。
+
+実測結果（2026-10-09、`8b1db16`）:
+
+- `n2-standard-32`、Spot、生成32 worker、分類16 worker、256 bucket、再試行0回で成功した。
+- wall timeは7時間10分22秒、`calculationElapsedMs`は25821955 ms（約7時間10分）だった。
+  ローカル実行（生成16 worker、分類8 worker）の33144433 ms から約22%短縮した。
+- 最大RSSは約13.6 GiBで、128 GiBのうち1割程度しか使わなかった。
+  次回は`n2-highmem`系ではなく、より安価な構成やvCPU増強を検討できる。
+- CPU使用率は656%で、32 vCPUに対して並列度が足りていない。
+  bucket分布の偏りが律速とみられるため、bucket数の増加や分割方法の見直しが次の改善点になる。
+- `generationWorkers`、`classificationWorkers`、`calculationElapsedMs`を除いたレポート本文が
+  ローカル結果と完全に一致した。wait-coreキャッシュ統計も一致した（中断がなかったため）。
+- `checkpoint_uploaded_files`は480、`checkpoint_restored_files`は0で、
+  成功時に`gs://BUCKET/checkpoints/thirteen-tile/COMMIT/`が削除されることを確認した。
+- Spot中断は発生しなかったため、実環境での再開動作はまだ未検証である。
 
 ### Phase 3: 必要な場合だけ細粒度化
 
