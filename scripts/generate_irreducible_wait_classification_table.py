@@ -2,37 +2,29 @@
 
 from __future__ import annotations
 
-import ast
+import json
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "examples" / "irreducible_wait_classification_table.py"
 REPORTS = (
-    (4, ROOT / "reports" / "four-tile-direct-report.txt", 11),
-    (7, ROOT / "reports" / "seven-tile-report.txt", 49),
-    (10, ROOT / "reports" / "ten-tile-report.txt", 199),
-    (13, ROOT / "reports" / "thirteen-tile-report.txt", 708),
+    (4, ROOT / "reports" / "four-tile-direct-report.json", 11),
+    (7, ROOT / "reports" / "seven-tile-report.json", 49),
+    (10, ROOT / "reports" / "ten-tile-report.json", 199),
+    (13, ROOT / "reports" / "thirteen-tile-report.json", 708),
 )
-HEADER = "waitDecompositionCodes\twaitDecompositionCodesKey\t"
 
 
 def read_code_lists(path: Path, expected_count: int) -> list[tuple[int, ...]]:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    start = next(index for index, line in enumerate(lines) if line.startswith(HEADER)) + 1
+    report = json.loads(path.read_text(encoding="utf-8"))
     values: list[tuple[int, ...]] = []
-    for line in lines[start:]:
-        if line.startswith("##"):
-            break
-        fields = line.split("\t")
-        if len(fields) < 2:
-            continue
-        parsed = ast.literal_eval(fields[0])
-        codes = tuple(parsed)
+    for group in report["irreducibleGroupsByWaitDecompositionCodes"]:
+        codes = tuple(group["waitDecompositionCodes"])
         if not all(isinstance(code, int) and code >= 0 for code in codes):
-            raise ValueError(f"invalid code list in {path}: {fields[0]}")
+            raise ValueError(f"invalid code list in {path}: {codes}")
         if tuple(sorted(codes)) != codes:
-            raise ValueError(f"unsorted code list in {path}: {fields[0]}")
+            raise ValueError(f"unsorted code list in {path}: {codes}")
         values.append(codes)
 
     unique_values = sorted(set(values))

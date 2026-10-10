@@ -126,8 +126,8 @@ PYTHONPATH=examples python3 -m unittest examples/test_zenn_wait_pattern_comparis
 
 - [比較データと集計実装](../examples/zenn_wait_pattern_comparison.py)
 - [比較の回帰テスト](../examples/test_zenn_wait_pattern_comparison.py)
-- [4枚形の生成済みレポート](../reports/four-tile-direct-report.txt)
-- [7枚形の生成済みレポート](../reports/seven-tile-report.txt)
+- [4枚形の生成済みレポート](../reports/four-tile-direct-report.json)
+- [7枚形の生成済みレポート](../reports/seven-tile-report.json)
 - [通常形の待ち意味論と待ち牌列挙](../Mahjong/WaitCompletionFinder.lean)
 - [待ち核と待ち分解コード](../Mahjong/WaitDecompositionCode.lean)
 - [Zenn本の用語定義](https://zenn.dev/firedial/books/mahjang-waiting/viewer/definition)

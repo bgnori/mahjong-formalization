@@ -1,5 +1,6 @@
 import MahjongComputations.FourTile
 import MahjongComputations.Parallel
+import MahjongComputations.ReportJson
 
 /-!
 # Four-tile report generator
@@ -10,23 +11,9 @@ Run through Lake with `lake build fourTileReport`.
 namespace MahjongComputations.FourTileReport
 
 open MahjongComputations.FourTile
+open MahjongComputations.ReportJson
+open Lean
 open WaitDecompositionCode
-
-private def newline : String := "\n"
-
-private def reducibilityName : Option WaitReducibility → String
-  | none => "none"
-  | some .reducible => "reducible"
-  | some .irreducible => "irreducible"
-
-private def reportLine (report : FourTileShapeReport) : String :=
-  String.intercalate "\t" [
-    formatTiles report.tiles,
-    formatTiles report.waits,
-    reducibilityName report.reducibility,
-    toString report.waitDecompositionCodes,
-    toString (waitDecompositionCodesKey report.waitDecompositionCodes)
-  ]
 
 private def reducibilityCount (reports : List FourTileShapeReport)
     (reducibility : WaitReducibility) : Nat :=
@@ -36,66 +23,69 @@ private def reportsByReducibility (reports : List FourTileShapeReport)
     (reducibility : WaitReducibility) : List FourTileShapeReport :=
   reports.filter fun report => report.reducibility == some reducibility
 
-private def reportText
-    (directReports : List FourTileShapeReport) (cache : SharedWaitCoreCacheStats) : String :=
+private def reportJson
+    (directReports : List FourTileShapeReport) (cache : SharedWaitCoreCacheStats)
+    (elapsedMs : Nat) : Json := Id.run do
   let irreducibleReports := reportsByReducibility directReports .irreducible
   let irreducibleGroups := groupByWaitDecompositionCodes
     (·.waitDecompositionCodes) (·.tiles) (·.waits) irreducibleReports
   let irreducibleRelationGroupCount :=
     (irreducibleReports.map (·.relationClassification)).eraseDups.length
-  let relationRefinementLines := irreducibleGroups.map fun group =>
+  let relationRefinements := irreducibleGroups.map fun group =>
     let refinedCount :=
       (irreducibleReports
         |>.filter (fun report => report.waitDecompositionCodes == group.codes)
         |>.map (·.relationClassification)
         |>.eraseDups).length
-    String.intercalate "\t" [toString group.codes, toString refinedCount]
+    object [
+      ("waitDecompositionCodes", naturalArray group.codes),
+      ("refinedGroupCount", natural refinedCount)
+    ]
   let waitTileCounts := countOccurrences (directReports.map (·.waits.length))
-  String.intercalate newline <|
-    ["# Four-tile direct derivation wait report",
-     "",
-     s!"allFourTileShapes: {allFourTileShapes.length}",
-    s!"enumeratedDerivations: {directDerivationCount}",
-    s!"tenpaiReports: {directReports.length}",
-      "",
-     "## Reducibility",
-     "",
-     "### Reducible",
-    s!"count: {reducibilityCount directReports .reducible}",
-    s!"waitCoreCacheHits: {cache.hits}",
-    s!"waitCoreCacheMisses: {cache.misses}",
-    s!"waitCoreCacheEntries: {cache.entries}",
-     "",
-     "### Irreducible",
-    s!"count: {reducibilityCount directReports .irreducible}",
-     "",
-    "#### Groups by waitDecompositionCodes",
-    s!"groupCount: {irreducibleGroups.length}",
-    "waitDecompositionCodes\twaitDecompositionCodesKey\tcount\trepresentativeTiles\trepresentativeWaits"] ++
-    irreducibleGroups.map formatWaitDecompositionCodeGroup ++
-    ["",
-     "#### Groups by waitDecompositionCodes and ComponentRelation",
-     s!"groupCount: {irreducibleRelationGroupCount}",
-     "waitDecompositionCodes\trefinedGroupCount"] ++
-    relationRefinementLines ++
-    ["",
-     "",
-     "## Wait tile count distribution"] ++
-    ([1, 2, 3, 4].map (formatWaitTileCount waitTileCounts)) ++
-    ["",
-     "## Tenpai reports",
-    "tiles\twaits\treducibility\twaitDecompositionCodes\twaitDecompositionCodesKey"] ++
-    directReports.map reportLine ++
-    [""]
+  let shapeReports := directReports.map fun shape =>
+    object [
+      ("tiles", string (formatTiles shape.tiles)),
+      ("waits", string (formatTiles shape.waits)),
+      ("reducibility", match shape.reducibility with
+        | none => Json.null
+        | some .reducible => string "reducible"
+        | some .irreducible => string "irreducible"),
+      ("waitDecompositionCodes", naturalArray shape.waitDecompositionCodes),
+      ("waitDecompositionCodesKey",
+        string (toString (waitDecompositionCodesKey shape.waitDecompositionCodes)))
+    ]
+  return report 4 elapsedMs [
+    ("allTileShapes", natural allFourTileShapes.length),
+    ("enumeratedDerivations", natural directDerivationCount),
+    ("tenpaiReports", natural directReports.length),
+    ("reducibility", object [
+      ("reducible", natural (reducibilityCount directReports .reducible)),
+      ("irreducible", natural (reducibilityCount directReports .irreducible))
+    ]),
+    ("irreducibleRelationGroupCount", natural irreducibleRelationGroupCount),
+    ("waitCoreCache", object [
+      ("hits", natural cache.hits),
+      ("misses", natural cache.misses),
+      ("entries", natural cache.entries)
+    ])
+  ] [
+    ("irreducibleGroupsByWaitDecompositionCodes",
+      array (irreducibleGroups.map codeGroup)),
+    ("relationRefinements", array relationRefinements),
+    ("waitTileCountDistribution", waitTileCountDistribution waitTileCounts),
+    ("tenpaiShapes", array shapeReports)
+  ]
 
 def run (args : List String) : IO UInt32 := do
   let (workers, outputPath) ←
-    MahjongComputations.parseWorkerArgs args "reports/four-tile-direct-report.txt"
+    MahjongComputations.parseWorkerArgs args "reports/four-tile-direct-report.json"
   let path : System.FilePath := outputPath
   if let some parent := path.parent then
     IO.FS.createDirAll parent
+  let started ← IO.monoMsNow
   let (directReports, cache) ← directDerivationReportsParallel workers
-  IO.FS.writeFile path (reportText directReports cache)
+  let finished ← IO.monoMsNow
+  IO.FS.writeFile path (encode (reportJson directReports cache (finished - started)))
   IO.println s!"wrote {path}"
   return 0
 

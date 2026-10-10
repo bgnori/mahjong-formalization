@@ -134,7 +134,7 @@ class SevenTileJobTests(unittest.TestCase):
         self.assertEqual(len(executables), len(remote_compute.JOB_TYPES))
         self.assertEqual(len(reports), len(remote_compute.JOB_TYPES))
         self.assertEqual(self.job_type.executable, "seven-tile-report-gen")
-        self.assertEqual(self.job_type.report_name, "seven-tile-report.txt")
+        self.assertEqual(self.job_type.report_name, "seven-tile-report.json")
 
 
 class TenTileJobTests(unittest.TestCase):
@@ -158,7 +158,7 @@ class TenTileJobTests(unittest.TestCase):
         self.assertEqual(commands[1:3], ["worker", "ten-tile"])
         self.assertEqual(commands[-1], "4")
         self.assertEqual(self.job_type.executable, "ten-tile-report-gen")
-        self.assertEqual(self.job_type.report_name, "ten-tile-report.txt")
+        self.assertEqual(self.job_type.report_name, "ten-tile-report.json")
 
 
 class ThirteenTileJobTests(unittest.TestCase):

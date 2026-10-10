@@ -60,7 +60,10 @@ lake build fourTileReport
 lake build sevenTileReport
 ```
 
-出力先はそれぞれ `reports/four-tile-direct-report.txt` と `reports/seven-tile-report.txt` です。
+レポートはJSON形式で、それぞれ `reports/four-tile-direct-report.json` と
+`reports/seven-tile-report.json` に出力される。各レポートはバージョン付きの共通スキーマを使い、
+名前付きの集計値、分解コード別グループ、待ち牌数分布を含む。分解コードキーはJSON Viewerで
+精度が失われないよう文字列として格納する。
 
 ### GCP Batchでの試行
 
@@ -85,8 +88,8 @@ GCP Batch + Spot VMの環境疎通には、まず4枚形レポートを使う。
 破棄して再計算する。再開した実行の`waitCoreCache*`の値は通し実行と必ず異なる。
 wait-coreキャッシュはプロセス内にしか存在しないためで、レポートのそれ以外の行は一致する。
 
-7枚形レポートは末尾に`calculationElapsedMs`を出力するため、実行ごとに内容が変わる。
-`reports/seven-tile-report.txt`と比較する際はこの行を除外する。
+7枚形レポートは`calculationElapsedMs`を含むため、実行ごとに内容が変わる。
+`reports/seven-tile-report.json`を比較する際はこの項目を除外する。
 
 ### 用途別devcontainer
 

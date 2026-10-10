@@ -18,10 +18,12 @@ private def emptyLegacySummary : TenTileSummary :=
     tenpaiReports := 0
     reducibleReports := 0
     irreducibleReports := 0
+    irreducibleDisjointReports := 0
     waitCoreCacheHits := 0
     waitCoreCacheMisses := 0
     waitCoreCacheEntries := 0
     irreducibleGroups := []
+    irreducibleRelationGroups := []
     waitTileCountDistribution := [] }
 
 private structure ComputationState where

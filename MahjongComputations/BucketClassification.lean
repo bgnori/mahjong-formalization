@@ -20,12 +20,24 @@ open WaitCompletionFinder
 open WaitDecompositionCode
 open MahjongComputations
 
+/-- Counts of irreducible hands with the same component-relation classification. -/
+structure WaitDecompositionRelationGroup where
+  codes : List Nat
+  relationKey : List Nat
+  count : Nat
+  representativeTiles : List Tile
+  representativeWaits : List Tile
+  relationDescription : String
+deriving BEq, DecidableEq, Repr
+
 /-- Classification totals contributed by one or more buckets. -/
 structure BucketSummary where
   tenpaiReports : Nat
   reducibleReports : Nat
   irreducibleReports : Nat
+  irreducibleDisjointReports : Nat
   irreducibleGroups : List WaitDecompositionCodeGroup
+  irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
 deriving BEq, DecidableEq, Repr
 
@@ -34,7 +46,9 @@ def empty : BucketSummary :=
   { tenpaiReports := 0
     reducibleReports := 0
     irreducibleReports := 0
+    irreducibleDisjointReports := 0
     irreducibleGroups := []
+    irreducibleRelationGroups := []
     waitTileCountDistribution := [] }
 
 private def addCodeGroup
@@ -58,12 +72,83 @@ private def addDistribution
       else
         count :: addDistribution rest addition
 
+private def componentRelationKey (relation : ComponentRelation) : Nat :=
+  let tileRelationKey := match relation.tileRelation with
+    | .overlapping => 0
+    | .disjoint => 1
+    | .invalidComponents => 2
+  (WaitComponentKind.all.idxOf relation.firstKind * WaitComponentKind.count +
+      WaitComponentKind.all.idxOf relation.secondKind) * 3 + tileRelationKey
+
+private def relationClassificationKey
+    (classification : WaitDecompositionRelationClassification) : List Nat :=
+  [classification.signatures.length] ++
+    classification.signatures.flatMap fun signature =>
+      [signature.code, signature.relations.length] ++
+        signature.relations.map componentRelationKey
+
+private def componentKindName : WaitComponentKind → String
+  | .tanki => "tanki"
+  | .toitsu => "toitsu"
+  | .ryanmen => "ryanmen"
+  | .kanchan => "kanchan"
+  | .penchan => "penchan"
+  | .shuntsu => "shuntsu"
+  | .koutsu => "koutsu"
+
+private def relationDescription
+    (classification : WaitDecompositionRelationClassification) : String :=
+  String.intercalate " | " <| classification.signatures.map fun signature =>
+    s!"{signature.code}: " ++ String.intercalate ", " (signature.relations.map fun relation =>
+      let tileRelation := match relation.tileRelation with
+        | .overlapping => "overlapping"
+        | .disjoint => "disjoint"
+        | .invalidComponents => "invalid"
+      s!"{componentKindName relation.firstKind}-{componentKindName relation.secondKind}={tileRelation}")
+
+private def hasDisjointRelation
+    (classification : WaitDecompositionRelationClassification) : Bool :=
+  classification.signatures.any fun signature =>
+    signature.relations.any fun relation => relation.tileRelation == .disjoint
+
+private def addRelationGroup (codes : List Nat) (relationKey : List Nat)
+    (tiles waits : List Tile) (description : String) :
+    List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
+  | [] => [{
+      codes, relationKey, count := 1, representativeTiles := tiles,
+      representativeWaits := waits, relationDescription := description
+    }]
+  | group :: rest =>
+      if group.codes == codes && group.relationKey == relationKey then
+        { group with count := group.count + 1 } :: rest
+      else
+        group :: addRelationGroup codes relationKey tiles waits description rest
+
+private def addRelationGroupCount (addition : WaitDecompositionRelationGroup) :
+    List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
+  | [] => [addition]
+  | group :: rest =>
+      if group.codes == addition.codes && group.relationKey == addition.relationKey then
+        { group with count := group.count + addition.count } :: rest
+      else
+        group :: addRelationGroupCount addition rest
+
+private def mergeRelationGroups
+    (groups : List WaitDecompositionRelationGroup)
+    (additions : List WaitDecompositionRelationGroup) :
+    List WaitDecompositionRelationGroup :=
+  additions.foldl (fun merged addition => addRelationGroupCount addition merged) groups
+
 /-- Combine two summaries, keeping the first occurrence order of groups and counts. -/
 def merge (first second : BucketSummary) : BucketSummary :=
   { tenpaiReports := first.tenpaiReports + second.tenpaiReports
     reducibleReports := first.reducibleReports + second.reducibleReports
     irreducibleReports := first.irreducibleReports + second.irreducibleReports
+    irreducibleDisjointReports :=
+      first.irreducibleDisjointReports + second.irreducibleDisjointReports
     irreducibleGroups := second.irreducibleGroups.foldl addCodeGroup first.irreducibleGroups
+    irreducibleRelationGroups :=
+      mergeRelationGroups first.irreducibleRelationGroups second.irreducibleRelationGroups
     waitTileCountDistribution :=
       second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
 
@@ -73,6 +158,9 @@ def addShapeReport (cache : SharedWaitCoreCache)
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let codes := waitDecompositionCodes completions
+  let relationClassification := waitDecompositionRelationClassification completions
+  let relationKey := relationClassificationKey relationClassification
+  let relationDescription := relationDescription relationClassification
   let reducible ← liftM <| canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
   let summary :=
     { summary with
@@ -83,10 +171,16 @@ def addShapeReport (cache : SharedWaitCoreCache)
   else
     return { summary with
       irreducibleReports := summary.irreducibleReports + 1
+      irreducibleDisjointReports :=
+        summary.irreducibleDisjointReports +
+          if hasDisjointRelation relationClassification then 1 else 0
       irreducibleGroups :=
-        addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups }
+        addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
+      irreducibleRelationGroups :=
+        addRelationGroup codes relationKey report.tiles waits relationDescription
+          summary.irreducibleRelationGroups }
 
-private def formatMagic : String := "MJWC-CLASSIFICATION-1"
+private def formatMagic : String := "MJWC-CLASSIFICATION-3"
 
 private def encodeNats (values : List Nat) : String :=
   String.intercalate "," (values.map toString)
@@ -119,6 +213,29 @@ private def parseGroup (line : String) : Option WaitDecompositionCodeGroup := do
       }
   | _ => none
 
+private def formatRelationGroup (group : WaitDecompositionRelationGroup) : String :=
+  String.intercalate "\t" [
+    encodeNats group.codes,
+    encodeNats group.relationKey,
+    toString group.count,
+    encodeTiles group.representativeTiles,
+    encodeTiles group.representativeWaits,
+    group.relationDescription
+  ]
+
+private def parseRelationGroup (line : String) : Option WaitDecompositionRelationGroup := do
+  match line.splitOn "\t" with
+  | [codes, relationKey, count, tiles, waits, description] =>
+      return {
+        codes := ← decodeNats codes
+        relationKey := ← decodeNats relationKey
+        count := ← count.toNat?
+        representativeTiles := ← decodeTiles tiles
+        representativeWaits := ← decodeTiles waits
+        relationDescription := description
+      }
+  | _ => none
+
 private def formatDistribution (entry : Nat × Nat) : String :=
   s!"{entry.1},{entry.2}"
 
@@ -134,8 +251,11 @@ private def summaryText (mentsuCount : Nat) (summary : BucketSummary) : String :
      s!"tenpaiReports={summary.tenpaiReports}",
      s!"reducibleReports={summary.reducibleReports}",
      s!"irreducibleReports={summary.irreducibleReports}",
+     s!"irreducibleDisjointReports={summary.irreducibleDisjointReports}",
      s!"groups={summary.irreducibleGroups.length}"] ++
     summary.irreducibleGroups.map formatGroup ++
+    [s!"relationGroups={summary.irreducibleRelationGroups.length}"] ++
+    summary.irreducibleRelationGroups.map formatRelationGroup ++
     [s!"distribution={summary.waitTileCountDistribution.length}"] ++
     summary.waitTileCountDistribution.map formatDistribution ++
     [""]
@@ -152,11 +272,17 @@ private def parseSummary (mentsuCount : Nat) (text : String) : Option BucketSumm
   let tenpaiReports ← lines[2]?.bind (parseField "tenpaiReports=")
   let reducibleReports ← lines[3]?.bind (parseField "reducibleReports=")
   let irreducibleReports ← lines[4]?.bind (parseField "irreducibleReports=")
-  let groupCount ← lines[5]?.bind (parseField "groups=")
-  let groupLines := (lines.drop 6).take groupCount
+  let irreducibleDisjointReports ← lines[5]?.bind (parseField "irreducibleDisjointReports=")
+  let groupCount ← lines[6]?.bind (parseField "groups=")
+  let groupLines := (lines.drop 7).take groupCount
   guard (groupLines.length == groupCount)
   let irreducibleGroups ← groupLines.mapM parseGroup
-  let remaining := lines.drop (6 + groupCount)
+  let relationGroupHeader := lines[7 + groupCount]?
+  let relationGroupCount ← relationGroupHeader.bind (parseField "relationGroups=")
+  let relationGroupLines := (lines.drop (8 + groupCount)).take relationGroupCount
+  guard (relationGroupLines.length == relationGroupCount)
+  let irreducibleRelationGroups ← relationGroupLines.mapM parseRelationGroup
+  let remaining := lines.drop (8 + groupCount + relationGroupCount)
   let distributionCount ← remaining[0]?.bind (parseField "distribution=")
   let distributionLines := (remaining.drop 1).take distributionCount
   guard (distributionLines.length == distributionCount)
@@ -165,7 +291,9 @@ private def parseSummary (mentsuCount : Nat) (text : String) : Option BucketSumm
     tenpaiReports
     reducibleReports
     irreducibleReports
+    irreducibleDisjointReports
     irreducibleGroups
+    irreducibleRelationGroups
     waitTileCountDistribution
   }
 

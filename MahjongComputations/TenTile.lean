@@ -28,10 +28,12 @@ structure TenTileSummary where
   tenpaiReports : Nat
   reducibleReports : Nat
   irreducibleReports : Nat
+  irreducibleDisjointReports : Nat
   waitCoreCacheHits : Nat
   waitCoreCacheMisses : Nat
   waitCoreCacheEntries : Nat
   irreducibleGroups : List WaitDecompositionCodeGroup
+  irreducibleRelationGroups : List BucketClassification.WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
 deriving BEq, DecidableEq, Repr
 
@@ -41,10 +43,12 @@ private def emptySummary : TenTileSummary :=
     tenpaiReports := 0
     reducibleReports := 0
     irreducibleReports := 0
+    irreducibleDisjointReports := 0
     waitCoreCacheHits := 0
     waitCoreCacheMisses := 0
     waitCoreCacheEntries := 0
     irreducibleGroups := []
+    irreducibleRelationGroups := []
     waitTileCountDistribution := [] }
 
 private def allTenTileShapeCount : Nat := 1900269316
@@ -87,10 +91,12 @@ def summaryParallel (workers : Nat) (workDirectory : System.FilePath)
     tenpaiReports := computed.tenpaiReports
     reducibleReports := computed.reducibleReports
     irreducibleReports := computed.irreducibleReports
+    irreducibleDisjointReports := computed.irreducibleDisjointReports
     waitCoreCacheHits := stats.hits
     waitCoreCacheMisses := stats.misses
     waitCoreCacheEntries := stats.entries
     irreducibleGroups := computed.irreducibleGroups
+    irreducibleRelationGroups := computed.irreducibleRelationGroups
     waitTileCountDistribution := computed.waitTileCountDistribution }
 
 end MahjongComputations.TenTile

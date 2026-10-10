@@ -63,8 +63,10 @@ lake build fourTileReport
 lake build sevenTileReport
 ```
 
-The reports are written to `reports/four-tile-direct-report.txt` and
-`reports/seven-tile-report.txt`.
+The reports are written as JSON to `reports/four-tile-direct-report.json` and
+`reports/seven-tile-report.json`. Reports share a versioned schema with named
+summary fields, arrays of decomposition-code groups, and wait-count distributions.
+Decomposition-code keys are strings so JSON viewers preserve their exact value.
 
 ### GCP Batch pilot
 
@@ -93,8 +95,8 @@ than an uninterrupted one, because the wait-core cache lives only in the process
 builds it; every other line of the report is unaffected.
 
 The seven-tile report ends with a `calculationElapsedMs` line, so successive runs are
-not byte-identical. Compare against `reports/seven-tile-report.txt` with that line
-excluded.
+not byte-identical. Compare against `reports/seven-tile-report.json` with
+`calculationElapsedMs` excluded.
 
 ### Dev containers by workload
 

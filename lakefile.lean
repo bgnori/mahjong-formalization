@@ -44,7 +44,7 @@ lean_exe «thirteen-tile-report-gen» where
 target fourTileReport pkg : FilePath := do
   let exeJob ← «four-tile-report-gen».fetch
   exeJob.mapM fun exeFile => do
-    let reportFile := pkg.dir / "reports" / "four-tile-direct-report.txt"
+    let reportFile := pkg.dir / "reports" / "four-tile-direct-report.json"
     proc {
       cmd := exeFile.toString
       args := #[reportFile.toString]
@@ -55,7 +55,7 @@ target fourTileReport pkg : FilePath := do
 target sevenTileReport pkg : FilePath := do
   let exeJob ← «seven-tile-report-gen».fetch
   exeJob.mapM fun exeFile => do
-    let reportFile := pkg.dir / "reports" / "seven-tile-report.txt"
+    let reportFile := pkg.dir / "reports" / "seven-tile-report.json"
     proc {
       cmd := exeFile.toString
       args := #[reportFile.toString]
@@ -66,7 +66,7 @@ target sevenTileReport pkg : FilePath := do
 target tenTileReport pkg : FilePath := do
   let exeJob ← «ten-tile-report-gen».fetch
   exeJob.mapM fun exeFile => do
-    let reportFile := pkg.dir / "reports" / "ten-tile-report.txt"
+    let reportFile := pkg.dir / "reports" / "ten-tile-report.json"
     proc {
       cmd := exeFile.toString
       args := #[reportFile.toString]
@@ -77,11 +77,10 @@ target tenTileReport pkg : FilePath := do
 target thirteenTileReport pkg : FilePath := do
   let exeJob ← «thirteen-tile-report-gen».fetch
   exeJob.mapM fun exeFile => do
-    let reportFile := pkg.dir / "reports" / "thirteen-tile-direct-report.txt"
+    let reportFile := pkg.dir / "reports" / "thirteen-tile-direct-report.json"
     proc {
       cmd := exeFile.toString
       args := #[reportFile.toString]
       cwd := some pkg.dir
     }
     return reportFile
-

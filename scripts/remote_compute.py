@@ -71,7 +71,7 @@ JOB_TYPES: dict[str, JobType] = {
     "four-tile": JobType(
         name="four-tile",
         executable="four-tile-report-gen",
-        report_name="four-tile-direct-report.txt",
+        report_name="four-tile-direct-report.json",
         machine_type="e2-standard-2",
         vcpu=2,
         memory_mib=8192,
@@ -81,7 +81,7 @@ JOB_TYPES: dict[str, JobType] = {
     "seven-tile": JobType(
         name="seven-tile",
         executable="seven-tile-report-gen",
-        report_name="seven-tile-report.txt",
+        report_name="seven-tile-report.json",
         machine_type="e2-standard-8",
         vcpu=8,
         memory_mib=32768,
@@ -91,7 +91,7 @@ JOB_TYPES: dict[str, JobType] = {
     "ten-tile": JobType(
         name="ten-tile",
         executable="ten-tile-report-gen",
-        report_name="ten-tile-report.txt",
+        report_name="ten-tile-report.json",
         machine_type="e2-standard-4",
         vcpu=4,
         memory_mib=16384,
@@ -102,7 +102,7 @@ JOB_TYPES: dict[str, JobType] = {
     "thirteen-tile": JobType(
         name="thirteen-tile",
         executable="thirteen-tile-report-gen",
-        report_name="thirteen-tile-report.txt",
+        report_name="thirteen-tile-report.json",
         machine_type="n2-standard-32",
         vcpu=32,
         memory_mib=131072,
@@ -496,7 +496,7 @@ def download_report(bucket: str, job_id: str, output: str | None) -> int:
     destination = (
         Path(output)
         if output
-        else ROOT / "reports" / f"{job_type_name}-batch-{job_id}.txt"
+        else ROOT / "reports" / f"{job_type_name}-batch-{job_id}.json"
     )
     if not destination.is_absolute():
         destination = ROOT / destination

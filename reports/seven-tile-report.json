@@ -1,0 +1,1178 @@
+{
+  "schemaVersion": 1,
+  "reportType": "mahjong-wait-report",
+  "tileCount": 7,
+  "calculationElapsedMs": 2205,
+  "summary": {
+    "allTileShapes": 18623330,
+    "enumeratedDerivations": 224502,
+    "tenpaiReports": 148809,
+    "reducibility": {
+      "reducible": 144516,
+      "irreducible": 4293
+    },
+    "waitCoreCache": {
+      "hits": 155229,
+      "misses": 6363,
+      "entries": 6363
+    },
+    "irreducibleRelationGroupCount": 57
+  },
+  "irreducibleGroupsByWaitDecompositionCodes": [
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        273,
+        442
+      ],
+      "waitDecompositionCodesKey": "79067348038",
+      "count": 60,
+      "representativeTiles": "4444566s",
+      "representativeWaits": "356s"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        338
+      ],
+      "waitDecompositionCodesKey": "68137885828",
+      "count": 60,
+      "representativeTiles": "1233455m",
+      "representativeWaits": "25m"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        429
+      ],
+      "waitDecompositionCodesKey": "123675",
+      "count": 186,
+      "representativeTiles": "67889m33s",
+      "representativeWaits": "7m"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273
+      ],
+      "waitDecompositionCodesKey": "77232772",
+      "count": 900,
+      "representativeTiles": "3356778p",
+      "representativeWaits": "69p"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        561
+      ],
+      "waitDecompositionCodesKey": "111082824",
+      "count": 186,
+      "representativeTiles": "12333s11z",
+      "representativeWaits": "3s1z"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        255,
+        255,
+        578
+      ],
+      "waitDecompositionCodesKey": "44461424707721170056",
+      "count": 15,
+      "representativeTiles": "5556777p",
+      "representativeWaits": "45678p"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        357,
+        442
+      ],
+      "waitDecompositionCodesKey": "79079251780",
+      "count": 36,
+      "representativeTiles": "5555667s",
+      "representativeWaits": "467s"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255
+      ],
+      "waitDecompositionCodesKey": "58695658632",
+      "count": 1080,
+      "representativeTiles": "33345p11z",
+      "representativeWaits": "36p1z"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        442,
+        442
+      ],
+      "waitDecompositionCodesKey": "62639227319428",
+      "count": 30,
+      "representativeTiles": "2333345m",
+      "representativeWaits": "1245m"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        357
+      ],
+      "waitDecompositionCodesKey": "89128584",
+      "count": 651,
+      "representativeTiles": "88p34445s",
+      "representativeWaits": "8p4s"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        429
+      ],
+      "waitDecompositionCodesKey": "97932484",
+      "count": 168,
+      "representativeTiles": "1234588m",
+      "representativeWaits": "36m"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195
+      ],
+      "waitDecompositionCodesKey": "62805700",
+      "count": 243,
+      "representativeTiles": "22m23456p",
+      "representativeWaits": "147p"
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255
+      ],
+      "waitDecompositionCodesKey": "93574",
+      "count": 36,
+      "representativeTiles": "5555666p",
+      "representativeWaits": "47p"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        338,
+        338
+      ],
+      "waitDecompositionCodesKey": "68146667524",
+      "count": 54,
+      "representativeTiles": "1122334m",
+      "representativeWaits": "14m"
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        429,
+        442
+      ],
+      "waitDecompositionCodesKey": "79088047750",
+      "count": 6,
+      "representativeTiles": "7888899s",
+      "representativeWaits": "679s"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        442,
+        442
+      ],
+      "waitDecompositionCodesKey": "99861027",
+      "count": 24,
+      "representativeTiles": "1113456s",
+      "representativeWaits": "236s"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        357,
+        578
+      ],
+      "waitDecompositionCodesKey": "56147605552729224",
+      "count": 36,
+      "representativeTiles": "5556667s",
+      "representativeWaits": "5678s"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        442
+      ],
+      "waitDecompositionCodesKey": "62618855644296",
+      "count": 36,
+      "representativeTiles": "2223455p",
+      "representativeWaits": "25p"
+    },
+    {
+      "waitDecompositionCodes": [
+        357
+      ],
+      "waitDecompositionCodesKey": "142",
+      "count": 42,
+      "representativeTiles": "4444666s",
+      "representativeWaits": "5s"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        442,
+        561
+      ],
+      "waitDecompositionCodesKey": "111151779",
+      "count": 12,
+      "representativeTiles": "1233555p",
+      "representativeWaits": "34p"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195,
+        338
+      ],
+      "waitDecompositionCodesKey": "68123458756",
+      "count": 27,
+      "representativeTiles": "3455567p",
+      "representativeWaits": "258p"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195,
+        442
+      ],
+      "waitDecompositionCodesKey": "79052906692",
+      "count": 18,
+      "representativeTiles": "3444567m",
+      "representativeWaits": "2358m"
+    },
+    {
+      "waitDecompositionCodes": [
+        338,
+        338,
+        338
+      ],
+      "waitDecompositionCodesKey": "86043809",
+      "count": 9,
+      "representativeTiles": "2345678s",
+      "representativeWaits": "258s"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        429,
+        442
+      ],
+      "waitDecompositionCodesKey": "79088033476",
+      "count": 12,
+      "representativeTiles": "1234445s",
+      "representativeWaits": "356s"
+    },
+    {
+      "waitDecompositionCodes": [
+        357,
+        357,
+        578
+      ],
+      "waitDecompositionCodesKey": "113020126",
+      "count": 15,
+      "representativeTiles": "3335777p",
+      "representativeWaits": "456p"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        442
+      ],
+      "waitDecompositionCodesKey": "126051",
+      "count": 24,
+      "representativeTiles": "1345666p",
+      "representativeWaits": "12p"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        255,
+        255,
+        442
+      ],
+      "waitDecompositionCodesKey": "62618855666500",
+      "count": 30,
+      "representativeTiles": "6777788s",
+      "representativeWaits": "5689s"
+    },
+    {
+      "waitDecompositionCodes": [
+        561
+      ],
+      "waitDecompositionCodesKey": "177",
+      "count": 12,
+      "representativeTiles": "1112222p",
+      "representativeWaits": "3p"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        429,
+        442,
+        442
+      ],
+      "waitDecompositionCodesKey": "62639248019140",
+      "count": 12,
+      "representativeTiles": "1234555m",
+      "representativeWaits": "1346m"
+    },
+    {
+      "waitDecompositionCodes": [
+        153,
+        153,
+        195,
+        195,
+        338
+      ],
+      "waitDecompositionCodesKey": "53953779323750",
+      "count": 36,
+      "representativeTiles": "4445566s",
+      "representativeWaits": "4567s"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        338,
+        429
+      ],
+      "waitDecompositionCodesKey": "77585736196",
+      "count": 12,
+      "representativeTiles": "1233345m",
+      "representativeWaits": "36m"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        442,
+        561
+      ],
+      "waitDecompositionCodesKey": "88032190852",
+      "count": 6,
+      "representativeTiles": "7788889m",
+      "representativeWaits": "679m"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        357,
+        442
+      ],
+      "waitDecompositionCodesKey": "62630781836932",
+      "count": 30,
+      "representativeTiles": "3334556p",
+      "representativeWaits": "457p"
+    },
+    {
+      "waitDecompositionCodes": [
+        153,
+        153,
+        273,
+        338
+      ],
+      "waitDecompositionCodesKey": "68137874726",
+      "count": 21,
+      "representativeTiles": "2233344m",
+      "representativeWaits": "234m"
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        273,
+        429,
+        442
+      ],
+      "waitDecompositionCodesKey": "62637736954438",
+      "count": 6,
+      "representativeTiles": "1112234s",
+      "representativeWaits": "235s"
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        357,
+        578
+      ],
+      "waitDecompositionCodesKey": "89511920902",
+      "count": 30,
+      "representativeTiles": "6667999s",
+      "representativeWaits": "578s"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195,
+        442,
+        442
+      ],
+      "waitDecompositionCodesKey": "62639212892356",
+      "count": 18,
+      "representativeTiles": "3334567s",
+      "representativeWaits": "24578s"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        357,
+        561,
+        578
+      ],
+      "waitDecompositionCodesKey": "70910844130440",
+      "count": 6,
+      "representativeTiles": "7778889s",
+      "representativeWaits": "789s"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        255,
+        255,
+        273,
+        442
+      ],
+      "waitDecompositionCodesKey": "49596100999787332",
+      "count": 24,
+      "representativeTiles": "4445567p",
+      "representativeWaits": "3568p"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        338,
+        338
+      ],
+      "waitDecompositionCodesKey": "86043795",
+      "count": 30,
+      "representativeTiles": "1223345m",
+      "representativeWaits": "25m"
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        442,
+        561
+      ],
+      "waitDecompositionCodesKey": "69721509581956",
+      "count": 6,
+      "representativeTiles": "1233444p",
+      "representativeWaits": "235p"
+    },
+    {
+      "waitDecompositionCodes": [
+        357,
+        561,
+        578
+      ],
+      "waitDecompositionCodesKey": "113047846",
+      "count": 6,
+      "representativeTiles": "6668999s",
+      "representativeWaits": "78s"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        338,
+        429
+      ],
+      "waitDecompositionCodesKey": "97961811",
+      "count": 6,
+      "representativeTiles": "1223334s",
+      "representativeWaits": "3s"
+    },
+    {
+      "waitDecompositionCodes": [
+        338,
+        338,
+        429
+      ],
+      "waitDecompositionCodesKey": "97961825",
+      "count": 6,
+      "representativeTiles": "1233456m",
+      "representativeWaits": "36m"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        357,
+        429,
+        442
+      ],
+      "waitDecompositionCodesKey": "79088066763",
+      "count": 6,
+      "representativeTiles": "1223444p",
+      "representativeWaits": "23p"
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        429,
+        442,
+        442
+      ],
+      "waitDecompositionCodesKey": "79089959643",
+      "count": 6,
+      "representativeTiles": "1222234p",
+      "representativeWaits": "134p"
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        561,
+        578
+      ],
+      "waitDecompositionCodesKey": "56161376657128584",
+      "count": 6,
+      "representativeTiles": "1112333s",
+      "representativeWaits": "1234s"
+    },
+    {
+      "waitDecompositionCodes": [
+        153,
+        153,
+        338,
+        429
+      ],
+      "waitDecompositionCodesKey": "77585725094",
+      "count": 6,
+      "representativeTiles": "7778899m",
+      "representativeWaits": "789m"
+    },
+    {
+      "waitDecompositionCodes": [
+        357,
+        429,
+        442
+      ],
+      "waitDecompositionCodesKey": "99858670",
+      "count": 6,
+      "representativeTiles": "1111223p",
+      "representativeWaits": "23p"
+    }
+  ],
+  "relationRefinements": [
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        273,
+        442
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        338
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        429
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        561
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        255,
+        255,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        357,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        442,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        357
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        429
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        338,
+        338
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        429,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        442,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        357,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        357
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        442,
+        561
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195,
+        338
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        338,
+        338,
+        338
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        429,
+        442
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        357,
+        357,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        255,
+        255,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        561
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        429,
+        442,
+        442
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        153,
+        153,
+        195,
+        195,
+        338
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        338,
+        429
+      ],
+      "refinedGroupCount": 2
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        442,
+        561
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        357,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        153,
+        153,
+        273,
+        338
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        273,
+        429,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        255,
+        255,
+        357,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        195,
+        442,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        357,
+        561,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        255,
+        255,
+        273,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        338,
+        338
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        195,
+        195,
+        273,
+        442,
+        561
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        357,
+        561,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        338,
+        429
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        338,
+        338,
+        429
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        357,
+        429,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        273,
+        429,
+        442,
+        442
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        117,
+        117,
+        255,
+        255,
+        561,
+        578
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        153,
+        153,
+        338,
+        429
+      ],
+      "refinedGroupCount": 1
+    },
+    {
+      "waitDecompositionCodes": [
+        357,
+        429,
+        442
+      ],
+      "refinedGroupCount": 1
+    }
+  ],
+  "waitTileCountDistribution": [
+    {
+      "waitTileKinds": 1,
+      "reportCount": 84180
+    },
+    {
+      "waitTileKinds": 2,
+      "reportCount": 61131
+    },
+    {
+      "waitTileKinds": 3,
+      "reportCount": 3273
+    },
+    {
+      "waitTileKinds": 4,
+      "reportCount": 192
+    },
+    {
+      "waitTileKinds": 5,
+      "reportCount": 33
+    },
+    {
+      "waitTileKinds": 6,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 7,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 8,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 9,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 10,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 11,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 12,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 13,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 14,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 15,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 16,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 17,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 18,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 19,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 20,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 21,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 22,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 23,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 24,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 25,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 26,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 27,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 28,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 29,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 30,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 31,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 32,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 33,
+      "reportCount": 0
+    },
+    {
+      "waitTileKinds": 34,
+      "reportCount": 0
+    }
+  ]
+}

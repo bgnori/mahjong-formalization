@@ -1,5 +1,6 @@
 import MahjongComputations.ThirteenTile
 import MahjongComputations.Parallel
+import MahjongComputations.ReportJson
 
 /-!
 # Thirteen-tile report generator
@@ -10,6 +11,8 @@ Run through Lake with `lake build thirteenTileReport`.
 namespace MahjongComputations.ThirteenTileReport
 
 open MahjongComputations.ThirteenTile
+open MahjongComputations.ReportJson
+open Lean
 
 private structure Options where
   generationWorkers : Nat
@@ -32,7 +35,7 @@ private def parseArgs (args : List String) : IO Options := do
     classificationWorkers := min 8 availableWorkers
     bucketCount := 256
     workDirectory := ".lake/build/thirteen-tile-buckets"
-    outputPath := "reports/thirteen-tile-report.txt"
+    outputPath := "reports/thirteen-tile-report.json"
   }
   for arg in args do
     if arg.startsWith "--generation-workers=" then
@@ -57,48 +60,33 @@ private def parseArgs (args : List String) : IO Options := do
       options := { options with outputPath := arg }
   return options
 
-private def newline : String := "\n"
-
-private def reportBody (options : Options) (result : ThirteenTileRunResult) : String :=
+private def reportJson (options : Options) (result : ThirteenTileRunResult)
+    (elapsedMs : Nat) : Json :=
   let summary := result.summary
-  String.intercalate newline <|
-    ["# Thirteen-tile direct derivation wait report",
-     "",
-     s!"generationWorkers: {options.generationWorkers}",
-     s!"classificationWorkers: {options.classificationWorkers}",
-     s!"bucketCount: {options.bucketCount}",
-     s!"generationReused: {result.generationReused}",
-     "",
-     s!"allThirteenTileShapes: {summary.allThirteenTileShapes}",
-    s!"enumeratedDerivations: {summary.enumeratedDerivations}",
-     s!"tenpaiReports: {summary.tenpaiReports}",
-     "",
-     "## Reducibility",
-     "",
-     "### Reducible",
-     s!"count: {summary.reducibleReports}",
-    s!"waitCoreCacheHits: {summary.waitCoreCacheHits}",
-    s!"waitCoreCacheMisses: {summary.waitCoreCacheMisses}",
-    s!"waitCoreCacheEntries: {summary.waitCoreCacheEntries}",
-     "",
-     "### Irreducible",
-     s!"count: {summary.irreducibleReports}",
-     "",
-    "#### Groups by waitDecompositionCodes",
-    s!"groupCount: {summary.irreducibleGroups.length}",
-    "waitDecompositionCodes\twaitDecompositionCodesKey\tcount\trepresentativeTiles\trepresentativeWaits"] ++
-    summary.irreducibleGroups.map formatWaitDecompositionCodeGroup ++
-    ["",
-     "## Wait tile count distribution"] ++
-    ((List.range Tile.count).map (fun index =>
-      formatWaitTileCount summary.waitTileCountDistribution (index + 1))) ++
-    [""]
-
-private def reportText (elapsedMs : Nat) (body : String) : String :=
-  String.intercalate newline [
-    body,
-    s!"calculationElapsedMs: {elapsedMs}",
-    ""
+  report 13 elapsedMs [
+    ("allTileShapes", natural summary.allThirteenTileShapes),
+    ("enumeratedDerivations", natural summary.enumeratedDerivations),
+    ("tenpaiReports", natural summary.tenpaiReports),
+    ("reducibility", object [
+      ("reducible", natural summary.reducibleReports),
+      ("irreducible", natural summary.irreducibleReports)
+    ]),
+    ("waitCoreCache", object [
+      ("hits", natural summary.waitCoreCacheHits),
+      ("misses", natural summary.waitCoreCacheMisses),
+      ("entries", natural summary.waitCoreCacheEntries)
+    ])
+  ] [
+    ("generation", object [
+      ("generationWorkers", natural options.generationWorkers),
+      ("classificationWorkers", natural options.classificationWorkers),
+      ("bucketCount", natural options.bucketCount),
+      ("generationReused", toJson result.generationReused)
+    ]),
+    ("irreducibleGroupsByWaitDecompositionCodes",
+      array (summary.irreducibleGroups.map codeGroup)),
+    ("waitTileCountDistribution",
+      waitTileCountDistribution summary.waitTileCountDistribution)
   ]
 
 def run (args : List String) : IO UInt32 := do
@@ -109,12 +97,8 @@ def run (args : List String) : IO UInt32 := do
   let started ← IO.monoMsNow
   let result ← summaryParallel options.generationWorkers options.classificationWorkers
     options.workDirectory options.bucketCount
-  let body := reportBody options result
-  let bodySize := body.utf8ByteSize
-  if bodySize == 0 then
-    throw (IO.userError "empty thirteen-tile report body")
   let finished ← IO.monoMsNow
-  IO.FS.writeFile path (reportText (finished - started) body)
+  IO.FS.writeFile path (encode (reportJson options result (finished - started)))
   IO.println s!"wrote {path}"
   return 0
 

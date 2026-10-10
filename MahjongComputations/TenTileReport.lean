@@ -1,5 +1,6 @@
 import MahjongComputations.TenTile
 import MahjongComputations.Parallel
+import MahjongComputations.ReportJson
 
 /-!
 # Ten-tile report generator
@@ -10,49 +11,66 @@ Run through Lake with `lake build tenTileReport`.
 namespace MahjongComputations.TenTileReport
 
 open MahjongComputations.TenTile
+open MahjongComputations.ReportJson
+open Lean
 
-private def newline : String := "\n"
+private def relationGroupJson
+    (group : BucketClassification.WaitDecompositionRelationGroup) : Json :=
+  object [
+    ("waitDecompositionCodes", naturalArray group.codes),
+    ("count", natural group.count),
+    ("componentRelations", string group.relationDescription),
+    ("representativeTiles", string (formatTiles group.representativeTiles)),
+    ("representativeWaits", string (formatTiles group.representativeWaits))
+  ]
 
-private def reportBody (summary : TenTileSummary) : String :=
-  String.intercalate newline <|
-    ["# Ten-tile direct derivation wait report",
-     "",
-     s!"allTenTileShapes: {summary.allTenTileShapes}",
-    s!"enumeratedDerivations: {summary.enumeratedDerivations}",
-     s!"tenpaiReports: {summary.tenpaiReports}",
-     "",
-     "## Reducibility",
-     "",
-     "### Reducible",
-     s!"count: {summary.reducibleReports}",
-    s!"waitCoreCacheHits: {summary.waitCoreCacheHits}",
-    s!"waitCoreCacheMisses: {summary.waitCoreCacheMisses}",
-    s!"waitCoreCacheEntries: {summary.waitCoreCacheEntries}",
-     "",
-     "### Irreducible",
-     s!"count: {summary.irreducibleReports}",
-     "",
-    "#### Groups by waitDecompositionCodes",
-    s!"groupCount: {summary.irreducibleGroups.length}",
-    "waitDecompositionCodes\twaitDecompositionCodesKey\tcount\trepresentativeTiles\trepresentativeWaits"] ++
-    summary.irreducibleGroups.map formatWaitDecompositionCodeGroup ++
-    ["",
-     "## Wait tile count distribution"] ++
-    ((List.range Tile.count).map (fun index =>
-      formatWaitTileCount summary.waitTileCountDistribution (index + 1))) ++
-    [""]
-
-private def reportText (elapsedMs : Nat) (body : String) : String :=
-  String.intercalate newline [
-    body,
-    s!"calculationElapsedMs: {elapsedMs}",
-    ""
+private def reportJson (summary : TenTileSummary) (elapsedMs : Nat) : Json := Id.run do
+  let relationRefinements := summary.irreducibleGroups.map fun group =>
+    let refinedCount :=
+      (summary.irreducibleRelationGroups.filter fun refined =>
+        refined.codes == group.codes).length
+    object [
+      ("waitDecompositionCodes", naturalArray group.codes),
+      ("refinedGroupCount", natural refinedCount)
+    ]
+  let splitGroups := summary.irreducibleGroups.filter fun group =>
+    (summary.irreducibleRelationGroups.filter fun refined =>
+      refined.codes == group.codes).length > 1
+  let reportsInSplitGroups := splitGroups.foldl (fun count group => count + group.count) 0
+  let splitRelationGroups := summary.irreducibleRelationGroups.filter fun refined =>
+    (summary.irreducibleRelationGroups.filter fun other =>
+      other.codes == refined.codes).length > 1
+  return report 10 elapsedMs [
+    ("allTileShapes", natural summary.allTenTileShapes),
+    ("enumeratedDerivations", natural summary.enumeratedDerivations),
+    ("tenpaiReports", natural summary.tenpaiReports),
+    ("reducibility", object [
+      ("reducible", natural summary.reducibleReports),
+      ("irreducible", natural summary.irreducibleReports),
+      ("withDisjointComponentRelations", natural summary.irreducibleDisjointReports)
+    ]),
+    ("waitCoreCache", object [
+      ("hits", natural summary.waitCoreCacheHits),
+      ("misses", natural summary.waitCoreCacheMisses),
+      ("entries", natural summary.waitCoreCacheEntries)
+    ]),
+    ("irreducibleRelationGroupCount", natural summary.irreducibleRelationGroups.length),
+    ("waitDecompositionCodesWithMultipleRelationGroups", natural splitGroups.length),
+    ("irreducibleReportsInThoseCodeGroups", natural reportsInSplitGroups)
+  ] [
+    ("irreducibleGroupsByWaitDecompositionCodes",
+      array (summary.irreducibleGroups.map codeGroup)),
+    ("relationRefinements", array relationRefinements),
+    ("componentRelationGroups", array (summary.irreducibleRelationGroups.map relationGroupJson)),
+    ("representativeHandsInSplitGroups", array (splitRelationGroups.map relationGroupJson)),
+    ("waitTileCountDistribution",
+      waitTileCountDistribution summary.waitTileCountDistribution)
   ]
 
 def run (args : List String) : IO UInt32 := do
   IO.eprintln "ten-tile: parsing arguments"
   let (workers, outputPath) ←
-    MahjongComputations.parseWorkerArgs args "reports/ten-tile-report.txt"
+    MahjongComputations.parseWorkerArgs args "reports/ten-tile-report.json"
   IO.eprintln s!"ten-tile: configured {workers} workers"
   let path : System.FilePath := outputPath
   if let some parent := path.parent then
@@ -60,12 +78,8 @@ def run (args : List String) : IO UInt32 := do
   let started ← IO.monoMsNow
   let workDirectory : System.FilePath := ".lake/build/ten-tile-buckets"
   let computedSummary ← summaryParallel workers workDirectory
-  let body := reportBody computedSummary
-  let bodySize := body.utf8ByteSize
-  if bodySize == 0 then
-    throw (IO.userError "empty ten-tile report body")
   let finished ← IO.monoMsNow
-  IO.FS.writeFile path (reportText (finished - started) body)
+  IO.FS.writeFile path (encode (reportJson computedSummary (finished - started)))
   IO.println s!"wrote {path}"
   return 0
 

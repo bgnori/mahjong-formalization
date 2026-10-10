@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import ast
+import json
 from bisect import bisect_left
 from pathlib import Path
 import re
@@ -15,14 +15,11 @@ from irreducible_wait_classification_table import (
 
 ROOT = Path(__file__).resolve().parent.parent
 REPORTS = (
-    (4, ROOT / "reports" / "four-tile-direct-report.txt", 11),
-    (7, ROOT / "reports" / "seven-tile-report.txt", 49),
-    (10, ROOT / "reports" / "ten-tile-report.txt", 199),
-    (13, ROOT / "reports" / "thirteen-tile-report.txt", 708),
+    (4, ROOT / "reports" / "four-tile-direct-report.json", 11),
+    (7, ROOT / "reports" / "seven-tile-report.json", 49),
+    (10, ROOT / "reports" / "ten-tile-report.json", 199),
+    (13, ROOT / "reports" / "thirteen-tile-report.json", 708),
 )
-HEADER = "waitDecompositionCodes\twaitDecompositionCodesKey\t"
-
-
 def tenhou_ids(mpsz: str) -> list[int]:
     result: list[int] = []
     copies_used: dict[int, int] = {}
@@ -40,14 +37,9 @@ def tenhou_ids(mpsz: str) -> list[int]:
 
 
 def report_groups(path: Path):
-    lines = path.read_text(encoding="utf-8").splitlines()
-    start = next(index for index, line in enumerate(lines) if line.startswith(HEADER)) + 1
-    for line in lines[start:]:
-        if line.startswith("##"):
-            return
-        fields = line.split("\t")
-        if len(fields) >= 4:
-            yield tuple(ast.literal_eval(fields[0])), fields[3]
+    report = json.loads(path.read_text(encoding="utf-8"))
+    for group in report["irreducibleGroupsByWaitDecompositionCodes"]:
+        yield tuple(group["waitDecompositionCodes"]), group["representativeTiles"]
 
 
 class IrreducibleWaitClassifierTest(unittest.TestCase):

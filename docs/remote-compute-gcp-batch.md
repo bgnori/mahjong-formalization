@@ -194,12 +194,15 @@ commit SHAのイメージがあればdigestを再利用し、Batch jobにはtag�
 追跡済みのローカルファイルを上書きしない。Spot中断を含む実際の再試行、課金、VM自動削除は、
 GCP上での初回試行後に確認する。
 
-7枚形レポートは末尾に`calculationElapsedMs`を含むため、実行ごとに内容が変わる。
-`reports/seven-tile-report.txt`との比較では、この行を除外する。
+7枚形レポートは`calculationElapsedMs`を含むため、実行ごとに内容が変わる。
+`reports/seven-tile-report.json`との比較では、この項目を除外する。
 
 ```bash
-diff <(grep -v calculationElapsedMs reports/seven-tile-report.txt) \
-     <(grep -v calculationElapsedMs reports/seven-tile-batch-JOB_ID.txt)
+python -c 'import json,sys; d=json.load(open(sys.argv[1])); d.pop("calculationElapsedMs",None); print(json.dumps(d,sort_keys=True))' \
+  reports/seven-tile-report.json > /tmp/seven-local.json
+python -c 'import json,sys; d=json.load(open(sys.argv[1])); d.pop("calculationElapsedMs",None); print(json.dumps(d,sort_keys=True))' \
+  reports/seven-tile-batch-JOB_ID.json > /tmp/seven-remote.json
+diff /tmp/seven-local.json /tmp/seven-remote.json
 ```
 
 並列動作は`gs://BUCKET/jobs/JOB_ID/logs/time-v.txt`の`Percent of CPU this job got`で判定する。
@@ -300,7 +303,7 @@ gs://BUCKET/jobs/JOB_ID/
   logs/
     time-v.txt
   results/
-    thirteen-tile-report.txt
+    thirteen-tile-report.json
 ```
 
 checkpointはジョブ間で共有するため、ジョブprefixの外に置く。

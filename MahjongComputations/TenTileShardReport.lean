@@ -1,4 +1,5 @@
 import MahjongComputations.TenTileLegacy
+import MahjongComputations.ReportJson
 
 /-!
 # Ten-tile sharded report generator
@@ -9,47 +10,34 @@ Run individual shards with `lake build ten-tile-shard-report-gen -- --shard=i --
 namespace MahjongComputations.TenTileShardReport
 
 open MahjongComputations.TenTile
+open MahjongComputations.ReportJson
+open Lean
 
-private def newline : String := "\n"
-
-private def reportBody (summary : TenTileSummary) (shardIdx : Nat) (numShards : Nat) : String :=
-  String.intercalate newline <|
-    [s!"# Ten-tile shard {shardIdx} of {numShards}",
-     "",
-     s!"shardIndex: {shardIdx}",
-     s!"numShards: {numShards}",
-     "",
-     s!"allTenTileShapes: {summary.allTenTileShapes}",
-     s!"enumeratedDerivations: {summary.enumeratedDerivations}",
-     s!"tenpaiReports: {summary.tenpaiReports}",
-     "",
-     "## Reducibility",
-     "",
-     "### Reducible",
-     s!"count: {summary.reducibleReports}",
-     s!"waitCoreCacheHits: {summary.waitCoreCacheHits}",
-     s!"waitCoreCacheMisses: {summary.waitCoreCacheMisses}",
-     s!"waitCoreCacheEntries: {summary.waitCoreCacheEntries}",
-     "",
-     "### Irreducible",
-     s!"count: {summary.irreducibleReports}",
-     "",
-     "#### Groups by waitDecompositionCodes",
-     s!"groupCount: {summary.irreducibleGroups.length}",
-     "waitDecompositionCodes\twaitDecompositionCodesKey\tcount\trepresentativeTiles\trepresentativeWaits"] ++
-    summary.irreducibleGroups.map formatWaitDecompositionCodeGroup ++
-    ["",
-     "## Wait tile count distribution"] ++
-    ((List.range Tile.count).map (fun index =>
-      formatWaitTileCount summary.waitTileCountDistribution (index + 1))) ++
-    [""]
-
-private def reportText (elapsedMs : Nat) (body : String) : String :=
-  String.intercalate newline [
-    body,
-    s!"calculationElapsedMs: {elapsedMs}",
-    ""
+private def reportJson (summary : TenTileSummary) (shardIdx numShards elapsedMs : Nat) : Json :=
+  let base := report 10 elapsedMs [
+    ("allTileShapes", natural summary.allTenTileShapes),
+    ("enumeratedDerivations", natural summary.enumeratedDerivations),
+    ("tenpaiReports", natural summary.tenpaiReports),
+    ("reducibility", object [
+      ("reducible", natural summary.reducibleReports),
+      ("irreducible", natural summary.irreducibleReports)
+    ]),
+    ("waitCoreCache", object [
+      ("hits", natural summary.waitCoreCacheHits),
+      ("misses", natural summary.waitCoreCacheMisses),
+      ("entries", natural summary.waitCoreCacheEntries)
+    ])
+  ] [
+    ("shard", object [
+      ("shardIndex", natural shardIdx),
+      ("numShards", natural numShards)
+    ]),
+    ("irreducibleGroupsByWaitDecompositionCodes",
+      array (summary.irreducibleGroups.map codeGroup)),
+    ("waitTileCountDistribution",
+      waitTileCountDistribution summary.waitTileCountDistribution)
   ]
+  base
 
 def parseArgs (args : List String) : Option (Nat × Nat × String) := do
   let mut shardIndex : Option Nat := none
@@ -69,7 +57,7 @@ def parseArgs (args : List String) : Option (Nat × Nat × String) := do
 def run (args : List String) : IO UInt32 := do
   match parseArgs args with
   | none =>
-      IO.eprintln "usage: ten-tile-shard-report-gen [--shard=i] [--num-shards=k] [output-file]"
+      IO.eprintln "usage: ten-tile-shard-report-gen [--shard=i] [--num-shards=k] [output.json]"
       return 1
   | some (shardIndex, numShards, outputPath) =>
       let path : System.FilePath := outputPath
@@ -77,12 +65,8 @@ def run (args : List String) : IO UInt32 := do
         IO.FS.createDirAll parent
       let started ← IO.monoMsNow
       let computedSummary := summaryWithShard shardIndex numShards
-      let body := reportBody computedSummary shardIndex numShards
-      let bodySize := body.utf8ByteSize
-      if bodySize == 0 then
-        throw (IO.userError "empty ten-tile shard report body")
       let finished ← IO.monoMsNow
-      IO.FS.writeFile path (reportText (finished - started) body)
+      IO.FS.writeFile path (encode (reportJson computedSummary shardIndex numShards (finished - started)))
       IO.println s!"wrote {path}"
       return 0
 

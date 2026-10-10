@@ -4,8 +4,8 @@
 64 bit整数で扱う方法を検討し、今後の実装方針を定める。
 
 根拠となる実装は [Mahjong/WaitDecompositionCode.lean](../Mahjong/WaitDecompositionCode.lean)、
-計算結果は [7枚形](../reports/seven-tile-report.txt)、[10枚形](../reports/ten-tile-report.txt)、
-[13枚形](../reports/thirteen-tile-report.txt) の各レポートを参照する。
+計算結果は [7枚形](../reports/seven-tile-report.json)、[10枚形](../reports/ten-tile-report.json)、
+[13枚形](../reports/thirteen-tile-report.json) の各レポートを参照する。
 
 ## 結論
 

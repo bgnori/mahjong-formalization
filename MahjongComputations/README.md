@@ -9,21 +9,21 @@ Build it explicitly when needed:
 lake build MahjongComputations
 ```
 
-Generate the four-tile text report:
+Generate the four-tile JSON report:
 
 ```bash
 lake build fourTileReport
 ```
 
-The report is written to `reports/four-tile-direct-report.txt`.
+The report is written to `reports/four-tile-direct-report.json`.
 
-Generate the seven-tile text report:
+Generate the seven-tile JSON report:
 
 ```bash
 lake build sevenTileReport
 ```
 
-The report is written to `reports/seven-tile-report.txt`.
+The report is written to `reports/seven-tile-report.json`.
 
 Current modules:
 
@@ -31,11 +31,11 @@ Current modules:
   direct derivations and report statistics, and formats shared report values.
 - `FourTile.lean`: enumerates all legal four-tile multisets and computes tenpai
   waits, reducibility, and wait decomposition codes.
-- `FourTileReport.lean`: writes the exhaustive four-tile report as a text file.
+- `FourTileReport.lean`: writes the exhaustive four-tile report as JSON.
 - `SevenTile.lean`: folds all legal seven-tile multisets into aggregate wait
   report data without retaining every shape.
-- `SevenTileReport.lean`: writes the exhaustive seven-tile aggregate report as a
-  text file.
+- `SevenTileReport.lean`: writes the exhaustive seven-tile aggregate report as
+  JSON.
 
 ## Reducibility
 
