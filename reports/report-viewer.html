@@ -99,6 +99,9 @@
     table { border-collapse: collapse; width: 100%; table-layout: fixed; }
     th, td { padding: .6rem .7rem; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
     th { position: sticky; top: 0; background: var(--surface-alt); z-index: 1; }
+    th button { display: flex; width: 100%; min-height: 0; align-items: center; justify-content: inherit; gap: .35rem; border: 0; border-radius: .25rem; padding: .1rem; background: transparent; text-align: inherit; font-weight: 650; }
+    th button:hover { color: var(--accent); }
+    .sort-indicator { color: var(--accent); font-size: .8em; }
     tbody tr:last-child td { border-bottom: 0; }
     td.number, th.number { text-align: right; font-variant-numeric: tabular-nums; white-space: normal; overflow-wrap: anywhere; }
     .tile-display { min-width: 0; }
@@ -259,8 +262,9 @@
     const thead = element("thead");
     const headerRow = element("tr");
     for (const header of headers) {
-      const cell = element("th", header.numeric ? "number" : "", header.label);
+      const cell = element("th", header.numeric ? "number" : "");
       cell.scope = "col";
+      cell.append(element("span", "", header.label));
       headerRow.append(cell);
     }
     thead.append(headerRow);
@@ -281,11 +285,31 @@
     return wrap;
   }
 
+  function compareSortValues(first, second) {
+    if (first === second) return 0;
+    if (first == null) return 1;
+    if (second == null) return -1;
+    if (typeof first === "number" && typeof second === "number") return first - second;
+    if (Array.isArray(first) && Array.isArray(second)) {
+      for (let index = 0; index < Math.min(first.length, second.length); index += 1) {
+        const result = compareSortValues(first[index], second[index]);
+        if (result) return result;
+      }
+      return first.length - second.length;
+    }
+    return new Intl.Collator("ja", {numeric: true, sensitivity: "base"})
+      .compare(String(first), String(second));
+  }
+
   function paginatedTable(headers, rows) {
     const container = element("div");
     let page = 0;
+    let sortColumn = -1;
+    let sortDirection = 1;
     const tableHolder = element("div");
     const pager = element("div", "pagination");
+    const sortHint = element("span", "muted", "列見出しをクリックすると並べ替えます。もう一度クリックすると順序が反転します。");
+    sortHint.style.fontSize = ".85rem";
     const summary = element("span", "muted");
     const controls = element("div", "pagination-controls");
     const previous = element("button", "", "前へ");
@@ -301,13 +325,47 @@
       pageSizeSelect.append(option);
     }
     controls.append(previous, pageLabel, next, pageSizeSelect);
-    pager.append(summary, controls);
+    pager.append(sortHint, summary, controls);
     const renderPage = () => {
       const size = Number(pageSizeSelect.value);
       const pageCount = Math.max(1, Math.ceil(rows.length / size));
       page = Math.min(page, pageCount - 1);
+      const sortedRows = rows.map((row, index) => ({row, index}));
+      if (sortColumn >= 0) {
+        sortedRows.sort((first, second) => {
+          const firstCell = first.row[sortColumn] || {};
+          const secondCell = second.row[sortColumn] || {};
+          const firstValue = firstCell.sortValue ?? firstCell.text ?? "";
+          const secondValue = secondCell.sortValue ?? secondCell.text ?? "";
+          return sortDirection * compareSortValues(firstValue, secondValue) || first.index - second.index;
+        });
+      }
       const start = page * size;
-      tableHolder.replaceChildren(makeTable(headers, rows.slice(start, start + size)));
+      const pageRows = sortedRows.slice(start, start + size).map(entry => entry.row);
+      const table = makeTable(headers, pageRows);
+      table.querySelectorAll("thead th").forEach((headerCell, index) => {
+        headerCell.setAttribute("aria-sort", sortColumn === index
+          ? (sortDirection === 1 ? "ascending" : "descending")
+          : "none");
+        const button = element("button", "", "");
+        button.type = "button";
+        button.append(element("span", "", headers[index].label));
+        button.append(element("span", "sort-indicator",
+          sortColumn === index ? (sortDirection === 1 ? "▲" : "▼") : "↕"));
+        button.setAttribute("aria-label",
+          `並べ替え: ${headers[index].label}${sortColumn === index ? (sortDirection === 1 ? "、昇順" : "、降順") : ""}`);
+        button.addEventListener("click", () => {
+          if (sortColumn === index) sortDirection *= -1;
+          else {
+            sortColumn = index;
+            sortDirection = 1;
+          }
+          page = 0;
+          renderPage();
+        });
+        headerCell.replaceChildren(button);
+      });
+      tableHolder.replaceChildren(table);
       summary.textContent = rows.length
         ? `${formatNumber(start + 1)}–${formatNumber(Math.min(start + size, rows.length))} / ${formatNumber(rows.length)} 件`
         : "0 件";
@@ -383,32 +441,22 @@
     search.type = "search";
     search.placeholder = "牌姿・待ち・コードで絞り込み";
     search.setAttribute("aria-label", "既約グループの検索");
-    const sort = element("select");
-    sort.setAttribute("aria-label", "既約グループの並べ替え");
-    for (const [value, label] of [["count", "件数の多い順"], ["codes", "コード順"]]) {
-      const option = element("option", "", label);
-      option.value = value;
-      sort.append(option);
-    }
-    controls.append(search, sort);
+    controls.append(search);
     section.append(controls);
     const tableHolder = element("div");
     section.append(tableHolder);
 
     const renderRows = () => {
       const query = search.value.trim().toLowerCase();
-      const ordered = [...groups].sort((a, b) => sort.value === "count"
-        ? (b.count || 0) - (a.count || 0)
-        : codeLabel(a.waitDecompositionCodes).localeCompare(codeLabel(b.waitDecompositionCodes), "ja"));
-      const rows = ordered.filter(group =>
+      const rows = groups.filter(group =>
         `${codeLabel(group.waitDecompositionCodes)} ${group.waitDecompositionCodesKey || ""} ` +
         `${group.representativeTiles || ""} ${group.representativeWaits || ""}`.toLowerCase().includes(query)
       ).map(group => [
-        { text: codeLabel(group.waitDecompositionCodes), className: "code-list" },
-        { text: String(group.waitDecompositionCodesKey ?? ""), className: "code-list" },
-        { text: formatNumber(group.count), className: "number" },
-        { node: tileDisplay(group.representativeTiles) },
-        { node: tileDisplay(group.representativeWaits) },
+        { text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list" },
+        { text: String(group.waitDecompositionCodesKey ?? ""), sortValue: group.waitDecompositionCodesKey, className: "code-list" },
+        { text: formatNumber(group.count), sortValue: group.count, className: "number" },
+        { node: tileDisplay(group.representativeTiles), sortValue: group.representativeTiles },
+        { node: tileDisplay(group.representativeWaits), sortValue: group.representativeWaits },
       ]);
       tableHolder.replaceChildren(paginatedTable([
         {label: "待ち分解コード"},
@@ -419,7 +467,6 @@
       ], rows));
     };
     search.addEventListener("input", renderRows);
-    sort.addEventListener("change", renderRows);
     renderRows();
     return section;
   }
@@ -433,11 +480,11 @@
       {label: "代表牌姿"},
       {label: "待ち"},
     ], groups.map(group => [
-      {text: codeLabel(group.waitDecompositionCodes), className: "code-list"},
-      {text: formatNumber(group.count), className: "number"},
-      {text: group.componentRelations || ""},
-      {node: tileDisplay(group.representativeTiles)},
-      {node: tileDisplay(group.representativeWaits)},
+      {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
+      {text: formatNumber(group.count), sortValue: group.count, className: "number"},
+      {text: group.componentRelations || "", sortValue: group.componentRelations || ""},
+      {node: tileDisplay(group.representativeTiles), sortValue: group.representativeTiles},
+      {node: tileDisplay(group.representativeWaits), sortValue: group.representativeWaits},
     ])));
     return section;
   }
@@ -448,8 +495,8 @@
       {label: "待ち分解コード"},
       {label: "細分類数", numeric: true},
     ], refinements.map(item => [
-      {text: codeLabel(item.waitDecompositionCodes), className: "code-list"},
-      {text: formatNumber(item.refinedGroupCount), className: "number"},
+      {text: codeLabel(item.waitDecompositionCodes), sortValue: item.waitDecompositionCodes, className: "code-list"},
+      {text: formatNumber(item.refinedGroupCount), sortValue: item.refinedGroupCount, className: "number"},
     ])));
     return section;
   }
@@ -468,10 +515,10 @@
       const rows = shapes.filter(shape =>
         `${shape.tiles || ""} ${shape.waits || ""} ${shape.reducibility || ""} ${codeLabel(shape.waitDecompositionCodes)}`.toLowerCase().includes(query)
       ).map(shape => [
-        {node: tileDisplay(shape.tiles)},
-        {node: tileDisplay(shape.waits)},
-        {text: shape.reducibility === "irreducible" ? "既約" : shape.reducibility === "reducible" ? "可約" : "—"},
-        {text: codeLabel(shape.waitDecompositionCodes), className: "code-list"},
+        {node: tileDisplay(shape.tiles), sortValue: shape.tiles},
+        {node: tileDisplay(shape.waits), sortValue: shape.waits},
+        {text: shape.reducibility === "irreducible" ? "既約" : shape.reducibility === "reducible" ? "可約" : "—", sortValue: shape.reducibility || ""},
+        {text: codeLabel(shape.waitDecompositionCodes), sortValue: shape.waitDecompositionCodes, className: "code-list"},
       ]);
       tableHolder.replaceChildren(paginatedTable([
         {label: "牌姿"},
