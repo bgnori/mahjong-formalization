@@ -30,13 +30,29 @@ deriving BEq, DecidableEq, Repr
 def allFourTileShapes : List (List Tile) :=
   legalTileMultisetsOfLength 4 Tile.all
 
+private def emptyRelationClassification : WaitDecompositionRelationClassification :=
+  { codes := [], signatures := [] }
+
+private def irreducibleClassification
+    (irreducible : Bool) (completions : List WaitCompletion) :
+    List Nat × WaitDecompositionRelationClassification :=
+  if irreducible then
+    (waitDecompositionCodes completions,
+      waitDecompositionRelationClassification completions)
+  else
+    ([], emptyRelationClassification)
+
 /-- Computed wait report for a four-tile shape, including non-tenpai shapes. -/
 def report (tiles : List Tile) : FourTileShapeReport :=
+  let completions := WaitCompletionFinder.findWaitCompletions tiles
+  let reducibility := determineReducibility tiles
+  let classification := irreducibleClassification
+    (reducibility == some .irreducible) completions
   { tiles
-    waits := waitingTiles tiles
-    reducibility := determineReducibility tiles
-    waitDecompositionCodes := findWaitDecompositionCodes tiles
-    relationClassification := findWaitDecompositionRelationClassification tiles }
+    waits := waitsFromCompletions completions
+    reducibility
+    waitDecompositionCodes := classification.1
+    relationClassification := classification.2 }
 
 /-- Exhaustive four-tile tenpai reports. -/
 def tenpaiReports : List FourTileShapeReport :=
@@ -47,12 +63,14 @@ private def directFourTileGenerated : CanonicalGenerationResult :=
 
 private def directReport (report : WaitCompletionGroup) : FourTileShapeReport :=
   let completions := report.completions
+  let reducible :=
+    canReduceMentsuPreservingWaitCoresGivenCompletions report.tiles completions
+  let classification := irreducibleClassification (!reducible) completions
   { tiles := report.tiles
     waits := waitsFromCompletions completions
-    reducibility := some (if canReduceMentsuPreservingWaitCoresGivenCompletions report.tiles completions
-      then .reducible else .irreducible)
-    waitDecompositionCodes := waitDecompositionCodes completions
-    relationClassification := waitDecompositionRelationClassification completions }
+    reducibility := some (if reducible then .reducible else .irreducible)
+    waitDecompositionCodes := classification.1
+    relationClassification := classification.2 }
 
 /-- Four-tile direct reports computed with one cache shared by all shapes. -/
 def directDerivationReportsWithCache :
@@ -63,12 +81,13 @@ def directDerivationReportsWithCache :
       let (reducible, cache) :=
         MahjongComputations.canReduceMentsuPreservingWaitCoresCached
           report.tiles completions cache
+      let classification := irreducibleClassification (!reducible) completions
       let result : FourTileShapeReport :=
         { tiles := report.tiles
           waits := waitsFromCompletions completions
           reducibility := some (if reducible then .reducible else .irreducible)
-          waitDecompositionCodes := waitDecompositionCodes completions
-          relationClassification := waitDecompositionRelationClassification completions }
+          waitDecompositionCodes := classification.1
+          relationClassification := classification.2 }
       (result :: reports, cache))
     ([], MahjongComputations.emptyWaitCoreCache)
   (reports.reverse, cache)
@@ -81,12 +100,13 @@ def directDerivationReportsParallel (workers : Nat) :
     let reversed ← reports.foldlM (init := []) fun results report => do
       let completions := report.completions
       let reducible ← canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
+      let classification := irreducibleClassification (!reducible) completions
       let result : FourTileShapeReport :=
         { tiles := report.tiles
           waits := waitsFromCompletions completions
           reducibility := some (if reducible then .reducible else .irreducible)
-          waitDecompositionCodes := waitDecompositionCodes completions
-          relationClassification := waitDecompositionRelationClassification completions }
+          waitDecompositionCodes := classification.1
+          relationClassification := classification.2 }
       return result :: results
     return reversed.reverse
   let stats ← cache.stats

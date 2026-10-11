@@ -81,9 +81,6 @@ def addShapeReport (cache : SharedWaitCoreCache)
     (summary : BucketSummary) (report : WaitCompletionGroup) : IO BucketSummary := do
   let completions := report.completions
   let waits := waitsFromCompletions completions
-  let codes := waitDecompositionCodes completions
-  let relationClassification := waitDecompositionRelationClassification completions
-  let relationKey := waitDecompositionRelationKey relationClassification
   let reducible ← liftM <| canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
   let summary :=
     { summary with
@@ -92,6 +89,9 @@ def addShapeReport (cache : SharedWaitCoreCache)
   if reducible then
     return { summary with reducibleReports := summary.reducibleReports + 1 }
   else
+    let codes := waitDecompositionCodes completions
+    let relationClassification := waitDecompositionRelationClassification completions
+    let relationKey := waitDecompositionRelationKey relationClassification
     return { summary with
       irreducibleReports := summary.irreducibleReports + 1
       irreducibleDisjointReports :=

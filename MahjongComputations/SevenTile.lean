@@ -59,9 +59,6 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
     ComputationState :=
   let completions := report.completions
   let waits := waitsFromCompletions completions
-  let codes := waitDecompositionCodes completions
-  let relationClassification := waitDecompositionRelationClassification completions
-  let relationKey := waitDecompositionRelationKey relationClassification
   let (reducible, waitCoreCache) :=
     canReduceMentsuPreservingWaitCoresCached report.tiles completions state.waitCoreCache
   let summary :=
@@ -72,6 +69,9 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   let summary := if reducible then
     { summary with reducibleReports := summary.reducibleReports + 1 }
   else
+    let codes := waitDecompositionCodes completions
+    let relationClassification := waitDecompositionRelationClassification completions
+    let relationKey := waitDecompositionRelationKey relationClassification
     { summary with
       irreducibleReports := summary.irreducibleReports + 1
       irreducibleDisjointReports := summary.irreducibleDisjointReports +
@@ -86,9 +86,6 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
     (summary : SevenTileSummary) (report : WaitCompletionGroup) : BaseIO SevenTileSummary := do
   let completions := report.completions
   let waits := waitsFromCompletions completions
-  let codes := waitDecompositionCodes completions
-  let relationClassification := waitDecompositionRelationClassification completions
-  let relationKey := waitDecompositionRelationKey relationClassification
   let reducible ← canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
   let summary :=
     { summary with
@@ -97,6 +94,9 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
   if reducible then
     return { summary with reducibleReports := summary.reducibleReports + 1 }
   else
+    let codes := waitDecompositionCodes completions
+    let relationClassification := waitDecompositionRelationClassification completions
+    let relationKey := waitDecompositionRelationKey relationClassification
     return { summary with
       irreducibleReports := summary.irreducibleReports + 1
       irreducibleDisjointReports := summary.irreducibleDisjointReports +
