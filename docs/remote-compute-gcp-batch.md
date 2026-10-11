@@ -208,8 +208,30 @@ diff /tmp/seven-local.json /tmp/seven-remote.json
 並列動作は`gs://BUCKET/jobs/JOB_ID/logs/time-v.txt`の`Percent of CPU this job got`で判定する。
 100%を大きく超えていれば、分類フェーズが並列実行されている。
 
-Mathlib cacheとLake build cacheをコンテナイメージへ含めるかは、イメージサイズと再ビルド時間を
-初回試行で測って決める。
+### 将来改善: Lean・Mathlibベースイメージ
+
+現行の`remote-compute.Dockerfile`は、commitごとの計算イメージを作るたびに
+`lake exe cache get`と全レポート生成器の`lake build`を実行する。Mathlibをソースから全量
+コンパイルしているわけではないが、Mathlibキャッシュの取得・展開と依存関係の確認が毎回発生する。
+また、Cloud Buildは前回イメージを`--cache-from`で明示的に読み込んでいないため、commitをまたいだ
+Docker layer cacheの再利用を期待できない。
+
+これは計算結果の正しさやSpot VMの実行時間には影響しないため、13枚形の現行計算中には変更しない。
+計算イメージのビルド待ちが開発サイクルの主な律速になった時点で、次を検討する。
+
+1. `lean-toolchain`と依存関係を識別するhashごとに、Lean、Mathlib cache、Python依存を含む
+   コンテナベースイメージを作る。
+2. commitごとの計算イメージはそのベースイメージを`FROM`に使い、`Mahjong`と
+   `MahjongComputations`だけをコピーしてプロジェクト部分をビルドする。
+3. 代替または補助として、BuildKitのregistry cacheをArtifact Registryへ保存し、
+   `--cache-from`/`--cache-to`で再利用する。
+4. ベースイメージのdigest、Lean toolchain、`lake-manifest.json`の対応を記録し、
+   依存更新時には必ず新しいベースイメージを作る。
+
+一般的なVMゴールデンイメージと目的は同じだが、GCP BatchがContainer-Optimized OS上で計算コンテナを
+実行する現在の構成では、VMイメージを管理するより依存関係を焼いたコンテナベースイメージの方が適する。
+導入時には、Cloud Build時間、イメージサイズ、Artifact Registry保存量、依存更新時の再現性を測定して
+現行方式と比較する。
 
 ## 資源設定
 
