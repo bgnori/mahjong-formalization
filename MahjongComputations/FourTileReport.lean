@@ -29,7 +29,8 @@ private def reportJson
     addWaitDecompositionRelationGroup shape.waitDecompositionCodes
       (waitDecompositionRelationKey shape.relationClassification)
       shape.tiles shape.waits
-      (waitDecompositionRelationDescription shape.relationClassification) groups) []
+      (waitDecompositionRelationDescription shape.relationClassification)
+      shape.pathologyWitnesses groups) []
   let disjointReports := (irreducibleReports.filter fun shape =>
     hasDisjointComponentRelation shape.relationClassification).length
   let pathologyGroups := directReports.foldl (fun groups shape =>

@@ -149,6 +149,18 @@ private def testPathologyReports : IO Unit := do
     total + if group.witness.pathology == kind then group.count else 0) 0
   ensure (count .waitSuppression == 126 && count .redundantAmbiguity == 3636)
     "unexpected seven-tile pathology counts"
+  let pathologicalRelations := seven.irreducibleRelationGroups.filter fun group =>
+    group.waitSuppressionCount > 0 || group.redundantAmbiguityCount > 0
+  let mixedRelations := seven.irreducibleRelationGroups.filter fun group =>
+    let healthy :=
+      group.count -
+        (group.waitSuppressionCount + group.redundantAmbiguityCount -
+          group.bothPathologiesCount)
+    [healthy, group.waitSuppressionCount - group.bothPathologiesCount,
+      group.redundantAmbiguityCount - group.bothPathologiesCount,
+      group.bothPathologiesCount].filter (· > 0) |>.length > 1
+  ensure (pathologicalRelations.length == 27 && mixedRelations.isEmpty)
+    "unexpected seven-tile relation-class pathology distribution"
 
 private def testPathologyCheckpoint : IO Unit := do
   let path : System.FilePath := ".lake/build/pathology-checkpoint-test.bin"

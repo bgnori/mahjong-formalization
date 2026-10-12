@@ -62,7 +62,11 @@ def codeGroup (group : WaitDecompositionCodeGroup) : Json :=
 def relationGroup (group : WaitDecompositionRelationGroup) : Json :=
   object [
     ("waitDecompositionCodes", naturalArray group.codes),
+    ("componentRelationKey", naturalArray group.relationKey),
     ("count", natural group.count),
+    ("waitSuppressionCount", natural group.waitSuppressionCount),
+    ("redundantAmbiguityCount", natural group.redundantAmbiguityCount),
+    ("bothPathologiesCount", natural group.bothPathologiesCount),
     ("componentRelations", string group.relationDescription),
     ("representativeTiles", string (formatTiles group.representativeTiles)),
     ("representativeWaits", string (formatTiles group.representativeWaits))
@@ -74,6 +78,18 @@ def commonSummaryFields (codeGroups : List WaitDecompositionCodeGroup)
     List (String × Json) :=
   let splitCodeGroups := codeGroups.filter fun group =>
     (relationGroups.filter fun relation => relation.codes == group.codes).length > 1
+  let pathologicalRelationGroups := relationGroups.filter fun group =>
+    group.waitSuppressionCount > 0 || group.redundantAmbiguityCount > 0
+  let mixedPathologyRelationGroups := relationGroups.filter fun group =>
+    let healthyCount :=
+      group.count -
+        (group.waitSuppressionCount + group.redundantAmbiguityCount -
+          group.bothPathologiesCount)
+    let suppressionOnlyCount := group.waitSuppressionCount - group.bothPathologiesCount
+    let ambiguityOnlyCount := group.redundantAmbiguityCount - group.bothPathologiesCount
+    [healthyCount, suppressionOnlyCount, ambiguityOnlyCount, group.bothPathologiesCount]
+      |>.filter (· > 0)
+      |>.length > 1
   [
     ("reducibility", object [
       ("reducible", natural reducibleReports),
@@ -81,6 +97,8 @@ def commonSummaryFields (codeGroups : List WaitDecompositionCodeGroup)
       ("withDisjointComponentRelations", natural disjointReports)
     ]),
     ("irreducibleRelationGroupCount", natural relationGroups.length),
+    ("pathologicalRelationGroupCount", natural pathologicalRelationGroups.length),
+    ("mixedPathologyDegreeRelationGroupCount", natural mixedPathologyRelationGroups.length),
     ("waitDecompositionCodesWithMultipleRelationGroups", natural splitCodeGroups.length),
     ("irreducibleReportsInThoseCodeGroups",
       natural (splitCodeGroups.foldl (fun count group => count + group.count) 0))

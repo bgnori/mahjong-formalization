@@ -415,6 +415,13 @@
     if (summary.irreducibleRelationGroupCount !== undefined) {
       metrics.append(metric("部品関係による細分類数", formatNumber(summary.irreducibleRelationGroupCount)));
     }
+    if (summary.pathologicalRelationGroupCount !== undefined) {
+      metrics.append(
+        metric("病的ケースを含む部品関係分類", formatNumber(summary.pathologicalRelationGroupCount)),
+        metric("病的度合いが混在する部品関係分類",
+          formatNumber(summary.mixedPathologyDegreeRelationGroupCount))
+      );
+    }
     if (summary.waitDecompositionCodesWithMultipleRelationGroups !== undefined) {
       metrics.append(metric("細分類を持つコード群", formatNumber(summary.waitDecompositionCodesWithMultipleRelationGroups)));
       metrics.append(metric("そのコード群に属する牌姿数", formatNumber(summary.irreducibleReportsInThoseCodeGroups)));
@@ -539,32 +546,85 @@
 
   function relationPanel(title, groups) {
     const section = panel(`${title} (${formatNumber(groups.length)})`);
-    const filter = waitTileKindFilter(groups);
+    const waitFilter = waitTileKindFilter(groups);
+    const pathologyFilter = element("select");
+    pathologyFilter.setAttribute("aria-label", "病的構造で絞り込み");
+    for (const [value, label] of [
+      ["", "すべての病的構造"],
+      ["any", "病的ケースを含む"],
+      ["none", "病的ケースなし"],
+      ["waitSuppression", "待ち抑制を含む"],
+      ["redundantAmbiguity", "冗長曖昧性を含む"],
+      ["both", "両方を持つ牌姿を含む"],
+      ["mixed", "分類内で病的度合いが混在"],
+      ["uniform", "分類内で病的度合いが均一"],
+    ]) {
+      const option = element("option", "", label);
+      option.value = value;
+      pathologyFilter.append(option);
+    }
     const controls = element("div", "controls");
-    controls.append(filter);
+    controls.append(waitFilter, pathologyFilter);
     section.append(controls);
     const tableHolder = element("div");
     section.append(tableHolder);
+    const pathologyCounts = group => {
+      const suppression = group.waitSuppressionCount || 0;
+      const ambiguity = group.redundantAmbiguityCount || 0;
+      const both = group.bothPathologiesCount || 0;
+      return {
+        healthy: group.count - suppression - ambiguity + both,
+        suppressionOnly: suppression - both,
+        ambiguityOnly: ambiguity - both,
+        both,
+      };
+    };
+    const activePathologyDegrees = group =>
+      Object.values(pathologyCounts(group)).filter(count => count > 0).length;
+    const matchesPathologyFilter = group => {
+      const counts = pathologyCounts(group);
+      switch (pathologyFilter.value) {
+        case "any": return counts.healthy < group.count;
+        case "none": return counts.healthy === group.count;
+        case "waitSuppression": return counts.suppressionOnly + counts.both > 0;
+        case "redundantAmbiguity": return counts.ambiguityOnly + counts.both > 0;
+        case "both": return counts.both > 0;
+        case "mixed": return activePathologyDegrees(group) > 1;
+        case "uniform": return activePathologyDegrees(group) === 1;
+        default: return true;
+      }
+    };
     const renderRows = () => {
       const visibleGroups = groups.filter(group =>
-        filter.value === "" ||
-        waitTileKindCount(group.representativeWaits) === Number(filter.value)
+        (waitFilter.value === "" ||
+          waitTileKindCount(group.representativeWaits) === Number(waitFilter.value)) &&
+        matchesPathologyFilter(group)
       );
       tableHolder.replaceChildren(paginatedTable([
         {label: "待ち分解コード"},
         {label: "件数", numeric: true},
+        {label: "病的内訳"},
         {label: "部品関係"},
         {label: "代表牌姿"},
         {label: "待ち"},
-      ], visibleGroups.map(group => [
-        {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
-        {text: formatNumber(group.count), sortValue: group.count, className: "number"},
-        {text: group.componentRelations || "", sortValue: group.componentRelations || ""},
-        {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
-        {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
-      ])));
+      ], visibleGroups.map(group => {
+        const counts = pathologyCounts(group);
+        const breakdown = `健全 ${formatNumber(counts.healthy)} / ` +
+          `抑制のみ ${formatNumber(counts.suppressionOnly)} / ` +
+          `曖昧のみ ${formatNumber(counts.ambiguityOnly)} / ` +
+          `両方 ${formatNumber(counts.both)}`;
+        return [
+          {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
+          {text: formatNumber(group.count), sortValue: group.count, className: "number"},
+          {text: breakdown, sortValue: activePathologyDegrees(group)},
+          {text: group.componentRelations || "", sortValue: group.componentRelations || ""},
+          {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
+          {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
+        ];
+      })));
     };
-    filter.addEventListener("change", renderRows);
+    waitFilter.addEventListener("change", renderRows);
+    pathologyFilter.addEventListener("change", renderRows);
     renderRows();
     return section;
   }

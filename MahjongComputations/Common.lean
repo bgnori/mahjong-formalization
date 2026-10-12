@@ -327,6 +327,9 @@ structure WaitDecompositionRelationGroup where
   codes : List Nat
   relationKey : List Nat
   count : Nat
+  waitSuppressionCount : Nat := 0
+  redundantAmbiguityCount : Nat := 0
+  bothPathologiesCount : Nat := 0
   representativeTiles : List Tile
   representativeWaits : List Tile
   relationDescription : String
@@ -376,17 +379,37 @@ def hasDisjointComponentRelation
 
 /-- Add one hand to the group with matching codes and component-relation key. -/
 def addWaitDecompositionRelationGroup (codes relationKey : List Nat)
-    (tiles waits : List Tile) (description : String) :
+    (tiles waits : List Tile) (description : String)
+    (pathologyWitnesses : List WaitPathologyWitness) :
     List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
-  | [] => [{
-      codes, relationKey, count := 1, representativeTiles := tiles,
-      representativeWaits := waits, relationDescription := description
-    }]
-  | group :: rest =>
-      if group.codes == codes && group.relationKey == relationKey then
-        { group with count := group.count + 1 } :: rest
-      else
-        group :: addWaitDecompositionRelationGroup codes relationKey tiles waits description rest
+  | groups =>
+    let hasSuppression := pathologyWitnesses.any fun witness =>
+      witness.pathology == .waitSuppression
+    let hasAmbiguity := pathologyWitnesses.any fun witness =>
+      witness.pathology == .redundantAmbiguity
+    let rec add : List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
+      | [] => [{
+          codes, relationKey, count := 1,
+          waitSuppressionCount := if hasSuppression then 1 else 0,
+          redundantAmbiguityCount := if hasAmbiguity then 1 else 0,
+          bothPathologiesCount := if hasSuppression && hasAmbiguity then 1 else 0,
+          representativeTiles := tiles, representativeWaits := waits,
+          relationDescription := description
+        }]
+      | group :: rest =>
+          if group.codes == codes && group.relationKey == relationKey then
+            { group with
+              count := group.count + 1
+              waitSuppressionCount :=
+                group.waitSuppressionCount + if hasSuppression then 1 else 0
+              redundantAmbiguityCount :=
+                group.redundantAmbiguityCount + if hasAmbiguity then 1 else 0
+              bothPathologiesCount :=
+                group.bothPathologiesCount + if hasSuppression && hasAmbiguity then 1 else 0
+            } :: rest
+          else
+            group :: add rest
+    add groups
 
 /-- Merge relation groups while retaining the first representative of each group. -/
 def mergeWaitDecompositionRelationGroups
@@ -397,7 +420,15 @@ def mergeWaitDecompositionRelationGroups
       | [] => [addition]
       | group :: rest =>
           if group.codes == addition.codes && group.relationKey == addition.relationKey then
-            { group with count := group.count + addition.count } :: rest
+            { group with
+              count := group.count + addition.count
+              waitSuppressionCount :=
+                group.waitSuppressionCount + addition.waitSuppressionCount
+              redundantAmbiguityCount :=
+                group.redundantAmbiguityCount + addition.redundantAmbiguityCount
+              bothPathologiesCount :=
+                group.bothPathologiesCount + addition.bothPathologiesCount
+            } :: rest
           else
             group :: add rest
     add merged) groups

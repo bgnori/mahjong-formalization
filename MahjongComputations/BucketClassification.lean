@@ -107,9 +107,10 @@ def addShapeReport (cache : SharedWaitCoreCache)
       irreducibleRelationGroups :=
         addWaitDecompositionRelationGroup codes relationKey report.tiles waits
           (waitDecompositionRelationDescription relationClassification)
+          witnesses
           summary.irreducibleRelationGroups }
 
-private def formatMagic : String := "MJWC-CLASSIFICATION-4"
+private def formatMagic : String := "MJWC-CLASSIFICATION-5"
 
 private def encodeNats (values : List Nat) : String :=
   String.intercalate "," (values.map toString)
@@ -147,6 +148,9 @@ private def formatRelationGroup (group : WaitDecompositionRelationGroup) : Strin
     encodeNats group.codes,
     encodeNats group.relationKey,
     toString group.count,
+    toString group.waitSuppressionCount,
+    toString group.redundantAmbiguityCount,
+    toString group.bothPathologiesCount,
     encodeTiles group.representativeTiles,
     encodeTiles group.representativeWaits,
     group.relationDescription
@@ -154,11 +158,14 @@ private def formatRelationGroup (group : WaitDecompositionRelationGroup) : Strin
 
 private def parseRelationGroup (line : String) : Option WaitDecompositionRelationGroup := do
   match line.splitOn "\t" with
-  | [codes, relationKey, count, tiles, waits, description] =>
+  | [codes, relationKey, count, suppression, ambiguity, both, tiles, waits, description] =>
       return {
         codes := ← decodeNats codes
         relationKey := ← decodeNats relationKey
         count := ← count.toNat?
+        waitSuppressionCount := ← suppression.toNat?
+        redundantAmbiguityCount := ← ambiguity.toNat?
+        bothPathologiesCount := ← both.toNat?
         representativeTiles := ← decodeTiles tiles
         representativeWaits := ← decodeTiles waits
         relationDescription := description

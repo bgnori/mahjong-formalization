@@ -1,9 +1,141 @@
 import Mahjong.WaitDecompositionCode
+import MahjongComputations.Common
 
 namespace MahjongTests.WaitDecompositionCode
 
 open _root_.WaitDecompositionCode
 open _root_.WaitCompletionFinder
+open _root_.MahjongComputations
+
+private structure ClassificationPathologyObservation where
+  codes : List Nat
+  relationKey : List Nat
+  pathologyDegree : Nat
+
+private structure ClassificationPathologyState where
+  observations : List ClassificationPathologyObservation
+  waitCoreCache : WaitCoreCache
+  uniform : Bool
+
+private def pathologyDegree (witnesses : List WaitPathologyWitness) : Nat :=
+  (if witnesses.any (fun witness => witness.pathology == .waitSuppression) then 1 else 0) +
+    (if witnesses.any (fun witness => witness.pathology == .redundantAmbiguity) then 2 else 0)
+
+private def addClassificationPathologyObservation (irreducibleOnly : Bool)
+    (state : ClassificationPathologyState) (group : WaitCompletionGroup) :
+    ClassificationPathologyState :=
+  if !state.uniform then state else
+  let (reducible, waitCoreCache) :=
+    canReduceMentsuPreservingWaitCoresCached
+      group.tiles group.completions state.waitCoreCache
+  if irreducibleOnly && reducible then { state with waitCoreCache } else
+  let (witnesses, waitCoreCache) :=
+    waitPathologyWitnessesCached group.tiles group.completions waitCoreCache
+  let classification := waitDecompositionRelationClassification group.completions
+  let codes := waitDecompositionCodes group.completions
+  let relationKey := waitDecompositionRelationKey classification
+  let degree := pathologyDegree witnesses
+  match state.observations.find? fun observation =>
+      observation.codes == codes && observation.relationKey == relationKey with
+  | none =>
+      { observations := { codes, relationKey, pathologyDegree := degree } :: state.observations
+        waitCoreCache
+        uniform := true }
+  | some observation =>
+      { state with waitCoreCache, uniform := observation.pathologyDegree == degree }
+
+/--
+Whether every standard-form tenpai hand generated for `mentsuCount` has a pathology
+degree determined by its wait-decomposition codes and component-relation classification.
+-/
+def tenpaiRelationClassificationHasUniformPathologyDegree
+    (mentsuCount : Nat) (irreducibleOnly : Bool := false) : Bool :=
+  let groups := (canonicalWaitCompletionGroups mentsuCount).groups
+  let result := groups.foldl (addClassificationPathologyObservation irreducibleOnly) {
+    observations := []
+    waitCoreCache := emptyWaitCoreCache
+    uniform := true
+  }
+  result.uniform
+
+/--
+Among all generated four-tile standard-form tenpai hands, equal decomposition codes
+and component relations imply equal pathology degree.
+-/
+theorem fourTileTenpai_relationClassification_determines_pathologyDegree :
+    tenpaiRelationClassificationHasUniformPathologyDegree 1 = true := by
+  native_decide
+
+/--
+Among generated irreducible seven-tile standard-form tenpai hands, equal
+decomposition codes and component relations imply equal pathology degree.
+-/
+theorem sevenTileIrreducibleTenpai_relationClassification_determines_pathologyDegree :
+    tenpaiRelationClassificationHasUniformPathologyDegree 2 true = true := by
+  native_decide
+
+private def healthySevenTileCounterexample : List Tile :=
+  manzu [2, 3, 4, 4, 4, 4] ++ Tile.numberedTiles .Pinzu [5]
+
+private def suppressedSevenTileCounterexample : List Tile :=
+  manzu [2, 2, 2, 2, 3, 4, 5]
+
+/--
+Without the irreducibility restriction, seven-tile tenpai hands provide a
+counterexample: the same classification can have different pathology degrees.
+-/
+theorem sevenTileTenpai_relationClassification_doesNotDeterminePathologyDegree :
+    let healthyCompletions := findWaitCompletions healthySevenTileCounterexample
+    let suppressedCompletions := findWaitCompletions suppressedSevenTileCounterexample
+    !healthyCompletions.isEmpty &&
+    !suppressedCompletions.isEmpty &&
+    waitDecompositionCodes healthyCompletions =
+      waitDecompositionCodes suppressedCompletions &&
+    waitDecompositionRelationClassification healthyCompletions =
+      waitDecompositionRelationClassification suppressedCompletions &&
+    pathologyDegree (waitPathologyWitnesses healthySevenTileCounterexample) = 0 &&
+    pathologyDegree (waitPathologyWitnesses suppressedSevenTileCounterexample) = 1 := by
+  native_decide
+
+private def firstHealthyTenTileCounterexample : List Tile :=
+  Tile.numberedTiles .Pinzu [1, 2, 2, 2, 2, 3, 4, 6, 6, 6]
+
+private def firstAmbiguousTenTileCounterexample : List Tile :=
+  Tile.numberedTiles .Souzu [2, 2, 2, 4, 5, 5, 5, 5, 6, 7]
+
+private def secondHealthyTenTileCounterexample : List Tile :=
+  manzu [1, 2, 3, 4, 4, 4, 5, 6, 7, 8]
+
+private def secondAmbiguousTenTileCounterexample : List Tile :=
+  Tile.numberedTiles .Pinzu [0, 1, 2, 3, 3, 3, 4, 5, 6, 7]
+
+private def isIrreducibleTenpaiWithDegree (tiles : List Tile) (degree : Nat) : Bool :=
+  let completions := findWaitCompletions tiles
+  !completions.isEmpty &&
+    !canReduceMentsuPreservingWaitCores tiles &&
+    pathologyDegree (waitPathologyWitnesses tiles) == degree
+
+private def hasSameRelationClassification (first second : List Tile) : Bool :=
+  let firstCompletions := findWaitCompletions first
+  let secondCompletions := findWaitCompletions second
+  waitDecompositionCodes firstCompletions == waitDecompositionCodes secondCompletions &&
+    waitDecompositionRelationClassification firstCompletions ==
+      waitDecompositionRelationClassification secondCompletions
+
+/--
+At ten tiles, even irreducible tenpai hands can share decomposition codes and
+component relations while having different pathology degrees.
+-/
+theorem tenTileIrreducibleTenpai_relationClassification_doesNotDeterminePathologyDegree :
+    isIrreducibleTenpaiWithDegree firstHealthyTenTileCounterexample 0 &&
+    isIrreducibleTenpaiWithDegree firstAmbiguousTenTileCounterexample 2 &&
+    hasSameRelationClassification
+      firstHealthyTenTileCounterexample firstAmbiguousTenTileCounterexample &&
+    isIrreducibleTenpaiWithDegree secondHealthyTenTileCounterexample 0 &&
+    isIrreducibleTenpaiWithDegree secondAmbiguousTenTileCounterexample 2 &&
+    hasSameRelationClassification
+      secondHealthyTenTileCounterexample secondAmbiguousTenTileCounterexample := by
+  native_decide
 
 private def testHand2345678 : List Tile := manzu [1, 2, 3, 4, 5, 6, 7]
 private def testHand1234 : List Tile := manzu [0, 1, 2, 3]

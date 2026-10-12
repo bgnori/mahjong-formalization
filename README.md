@@ -88,9 +88,21 @@ The marks can coexist (the first example has both), and cover reducible as well
 as irreducible hands. `summary.pathologies` counts marked hands;
 `pathologyGroups` groups them by mark, decomposition codes, and reducibility,
 with a representative hand and a removal witness. The viewer includes a
-filterable pathology section. Older v2 reports remain readable; regenerate them
+filterable pathology section. Its full component-relation classification table
+also shows healthy, suppression-only, ambiguity-only, and both counts per
+classification, and can filter pathology kinds or classifications with mixed
+degrees. Older v2 reports remain readable; regenerate them
 to see these fields. Old ten-/thirteen-tile classification checkpoints are
 reclassified from the existing generation buckets.
+
+Computational theorems verify that this classification determines pathology
+degree for all generated four-tile standard-form tenpai hands and for all
+generated irreducible seven-tile standard-form tenpai hands. Irreducibility is
+necessary at seven tiles: healthy `345555m6p` and wait-suppressing `3333456m`
+have the same decomposition codes and component-relation classification.
+At ten tiles the property fails even for irreducible hands: healthy
+`2333345777p` and redundantly ambiguous `3335666678s` have the same
+classification.
 
 ### GCP Batch pilot
 

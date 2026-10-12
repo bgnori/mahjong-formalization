@@ -84,6 +84,7 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
       irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
       irreducibleRelationGroups := addWaitDecompositionRelationGroup codes relationKey
         report.tiles waits (waitDecompositionRelationDescription relationClassification)
+        witnesses
         summary.irreducibleRelationGroups }
   { summary, waitCoreCache }
 
@@ -112,6 +113,7 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
       irreducibleGroups := addWaitDecompositionCodeGroup codes report.tiles waits summary.irreducibleGroups
       irreducibleRelationGroups := addWaitDecompositionRelationGroup codes relationKey
         report.tiles waits (waitDecompositionRelationDescription relationClassification)
+        witnesses
         summary.irreducibleRelationGroups }
 
 private def addCodeGroup
