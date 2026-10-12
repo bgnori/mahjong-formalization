@@ -415,6 +415,10 @@
     if (summary.irreducibleRelationGroupCount !== undefined) {
       metrics.append(metric("部品関係による細分類数", formatNumber(summary.irreducibleRelationGroupCount)));
     }
+    if (hasPathologyProfileData(data)) {
+      metrics.append(metric("待ち分解コード＋病的プロファイル分類数",
+        formatNumber(pathologyProfileGroups(data).length)));
+    }
     if (summary.pathologicalRelationGroupCount !== undefined) {
       metrics.append(
         metric("病的ケースを含む部品関係分類", formatNumber(summary.pathologicalRelationGroupCount)),
@@ -445,7 +449,7 @@
 
   function classificationCountsByWaitTileKinds(data) {
     const counts = new Map();
-    for (const group of data.componentRelationGroups || []) {
+    for (const group of pathologyProfileGroups(data)) {
       const kinds = waitTileKindCount(group.representativeWaits);
       counts.set(kinds, (counts.get(kinds) || 0) + 1);
     }
@@ -454,10 +458,10 @@
 
   function classificationCountPanel(data) {
     const counts = classificationCountsByWaitTileKinds(data);
-    const section = panel("待ち牌種数と分類数");
+    const section = panel("待ち牌種数と主分類数");
     section.append(makeTable([
       {label: "待ち牌種数"},
-      {label: "分類数", numeric: true},
+      {label: "主分類数", numeric: true},
     ], counts.map(([waitTileKinds, classificationCount]) => [
       {text: `${waitTileKinds} 種`, sortValue: waitTileKinds},
       {text: formatNumber(classificationCount), sortValue: classificationCount, className: "number"},
@@ -502,9 +506,135 @@
     return `[${Array.isArray(codes) ? codes.join(", ") : ""}]`;
   }
 
+  const pathologyProfiles = [
+    {key: "healthy", label: "健全"},
+    {key: "suppressionOnly", label: "待ち抑制のみ"},
+    {key: "ambiguityOnly", label: "冗長曖昧性のみ"},
+    {key: "both", label: "両方"},
+  ];
+
+  function pathologyCounts(group) {
+    const suppression = group.waitSuppressionCount || 0;
+    const ambiguity = group.redundantAmbiguityCount || 0;
+    const both = group.bothPathologiesCount || 0;
+    return {
+      healthy: group.count - suppression - ambiguity + both,
+      suppressionOnly: suppression - both,
+      ambiguityOnly: ambiguity - both,
+      both,
+    };
+  }
+
+  function hasPathologyProfileData(data) {
+    const groups = data.componentRelationGroups;
+    return Array.isArray(groups) && groups.length > 0 && groups.every(group =>
+      Number.isInteger(group.waitSuppressionCount) &&
+      Number.isInteger(group.redundantAmbiguityCount) &&
+      Number.isInteger(group.bothPathologiesCount) &&
+      Array.isArray(group.pathologyProfileRepresentatives)
+    );
+  }
+
+  function pathologyProfileGroups(data) {
+    if (!hasPathologyProfileData(data)) return [];
+    const codeGroups = new Map((data.irreducibleGroupsByWaitDecompositionCodes || []).map(group =>
+      [JSON.stringify(group.waitDecompositionCodes), group]
+    ));
+    const groups = new Map();
+    for (const relationGroup of data.componentRelationGroups) {
+      const codeKey = JSON.stringify(relationGroup.waitDecompositionCodes);
+      const counts = pathologyCounts(relationGroup);
+      for (const profile of pathologyProfiles) {
+        const count = counts[profile.key];
+        if (count <= 0) continue;
+        const key = `${codeKey}:${profile.key}`;
+        const representative = relationGroup.pathologyProfileRepresentatives.find(candidate =>
+          candidate.profile === profile.key
+        );
+        const existing = groups.get(key);
+        if (existing) {
+          existing.count += count;
+          existing.relationGroupCount += 1;
+          if (!existing.representativeTiles && representative) {
+            existing.representativeTiles = representative.representativeTiles || "";
+            existing.representativeWaits = representative.representativeWaits || "";
+          }
+        } else {
+          groups.set(key, {
+            waitDecompositionCodes: relationGroup.waitDecompositionCodes,
+            profile: profile.key,
+            profileLabel: profile.label,
+            count,
+            relationGroupCount: 1,
+            representativeTiles: representative?.representativeTiles || "",
+            representativeWaits: representative?.representativeWaits ||
+              codeGroups.get(codeKey)?.representativeWaits || "",
+          });
+        }
+      }
+    }
+    return [...groups.values()];
+  }
+
+  function pathologyProfilePanel(data) {
+    const groups = pathologyProfileGroups(data);
+    const section = panel(`主分類: 待ち分解コード＋病的プロファイル (${formatNumber(groups.length)})`);
+    section.append(element("p", "hint",
+      "既約テンパイを、待ち分解コードと「待ち抑制」「冗長曖昧性」の有無で分類します。病的プロファイルは強弱ではなく、独立した2つの性質の組合せです。"));
+    const search = element("input");
+    search.type = "search";
+    search.placeholder = "コード・プロファイル・牌姿・待ちで絞り込み";
+    search.setAttribute("aria-label", "主分類の検索");
+    const waitFilter = waitTileKindFilter(groups);
+    const profileFilter = element("select");
+    profileFilter.setAttribute("aria-label", "病的プロファイルで絞り込み");
+    const allProfiles = element("option", "", "すべての病的プロファイル");
+    allProfiles.value = "";
+    profileFilter.append(allProfiles);
+    for (const profile of pathologyProfiles) {
+      const option = element("option", "", profile.label);
+      option.value = profile.key;
+      profileFilter.append(option);
+    }
+    const controls = element("div", "controls");
+    controls.append(search, waitFilter, profileFilter);
+    const tableHolder = element("div");
+    section.append(controls, tableHolder);
+    const renderRows = () => {
+      const query = search.value.trim().toLowerCase();
+      const visibleGroups = groups.filter(group =>
+        (waitFilter.value === "" ||
+          waitTileKindCount(group.representativeWaits) === Number(waitFilter.value)) &&
+        (profileFilter.value === "" || group.profile === profileFilter.value) &&
+        (`${codeLabel(group.waitDecompositionCodes)} ${group.profileLabel} ` +
+          `${group.representativeTiles} ${group.representativeWaits}`).toLowerCase().includes(query)
+      );
+      tableHolder.replaceChildren(paginatedTable([
+        {label: "待ち分解コード"},
+        {label: "病的プロファイル"},
+        {label: "牌姿数", numeric: true},
+        {label: "部品関係細分類数", numeric: true},
+        {label: "代表牌姿"},
+        {label: "待ち"},
+      ], visibleGroups.map(group => [
+        {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
+        {text: group.profileLabel, sortValue: pathologyProfiles.findIndex(profile => profile.key === group.profile)},
+        {text: formatNumber(group.count), sortValue: group.count, className: "number"},
+        {text: formatNumber(group.relationGroupCount), sortValue: group.relationGroupCount, className: "number"},
+        {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
+        {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
+      ])));
+    };
+    search.addEventListener("input", renderRows);
+    waitFilter.addEventListener("change", renderRows);
+    profileFilter.addEventListener("change", renderRows);
+    renderRows();
+    return section;
+  }
+
   function groupPanel(data) {
     const groups = data.irreducibleGroupsByWaitDecompositionCodes || [];
-    const section = panel(`既約グループ (${formatNumber(groups.length)})`);
+    const section = panel(`待ち分解コードのみの分類 (${formatNumber(groups.length)})`);
     const controls = element("div", "controls");
     const search = element("input");
     search.type = "search";
@@ -568,17 +698,6 @@
     section.append(controls);
     const tableHolder = element("div");
     section.append(tableHolder);
-    const pathologyCounts = group => {
-      const suppression = group.waitSuppressionCount || 0;
-      const ambiguity = group.redundantAmbiguityCount || 0;
-      const both = group.bothPathologiesCount || 0;
-      return {
-        healthy: group.count - suppression - ambiguity + both,
-        suppressionOnly: suppression - both,
-        ambiguityOnly: ambiguity - both,
-        both,
-      };
-    };
     const activePathologyDegrees = group =>
       Object.values(pathologyCounts(group)).filter(count => count > 0).length;
     const matchesPathologyFilter = group => {
@@ -763,19 +882,20 @@
         `生成結果再利用 ${data.generation.generationReused ? "あり" : "なし"}`);
       overview.append(generation);
     }
-    const sections = [
-      overview,
+    const sections = [overview];
+    if (hasPathologyProfileData(data)) {
+      sections.push(pathologyProfilePanel(data), classificationCountPanel(data));
+    }
+    sections.push(
       distributionPanel(data),
       groupPanel(data),
       refinementsPanel(data.relationRefinements || [],
         data.irreducibleGroupsByWaitDecompositionCodes || []),
-      relationPanel("待ち分解コードと部品関係の全分類", data.componentRelationGroups || []),
+      relationPanel("構造的細分類: 待ち分解コード＋部品関係",
+        data.componentRelationGroups || []),
       relationPanel("複数の部品関係を持つグループの代表牌姿",
-        data.representativeHandsInSplitGroups || []),
-    ];
-    if (Array.isArray(data.componentRelationGroups)) {
-      sections.splice(1, 0, classificationCountPanel(data));
-    }
+        data.representativeHandsInSplitGroups || [])
+    );
     if (Array.isArray(data.pathologyGroups)) {
       sections.push(pathologyPanel(data.pathologyGroups));
     }

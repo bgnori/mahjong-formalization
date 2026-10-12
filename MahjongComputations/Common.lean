@@ -323,6 +323,13 @@ def groupByWaitDecompositionCodes {α : Type}
     []
 
 /-- Irreducible hands grouped by both their decomposition codes and component relations. -/
+structure WaitPathologyProfileRepresentative where
+  waitSuppression : Bool
+  redundantAmbiguity : Bool
+  tiles : List Tile
+  waits : List Tile
+deriving BEq, DecidableEq, Repr
+
 structure WaitDecompositionRelationGroup where
   codes : List Nat
   relationKey : List Nat
@@ -333,7 +340,35 @@ structure WaitDecompositionRelationGroup where
   representativeTiles : List Tile
   representativeWaits : List Tile
   relationDescription : String
+  pathologyProfileRepresentatives : List WaitPathologyProfileRepresentative := []
 deriving BEq, DecidableEq, Repr
+
+private def pathologyProfileRepresentative (tiles waits : List Tile)
+    (witnesses : List WaitPathologyWitness) : WaitPathologyProfileRepresentative :=
+  { waitSuppression := witnesses.any fun witness =>
+      witness.pathology == .waitSuppression
+    redundantAmbiguity := witnesses.any fun witness =>
+      witness.pathology == .redundantAmbiguity
+    tiles
+    waits }
+
+private def addPathologyProfileRepresentative
+    (representative : WaitPathologyProfileRepresentative) :
+    List WaitPathologyProfileRepresentative → List WaitPathologyProfileRepresentative
+  | [] => [representative]
+  | current :: rest =>
+      if current.waitSuppression == representative.waitSuppression &&
+          current.redundantAmbiguity == representative.redundantAmbiguity then
+        current :: rest
+      else
+        current :: addPathologyProfileRepresentative representative rest
+
+private def mergePathologyProfileRepresentatives
+    (representatives additions : List WaitPathologyProfileRepresentative) :
+    List WaitPathologyProfileRepresentative :=
+  additions.foldl
+    (fun merged addition => addPathologyProfileRepresentative addition merged)
+    representatives
 
 private def componentRelationKey (relation : ComponentRelation) : Nat :=
   let tileRelationKey := match relation.tileRelation with
@@ -387,6 +422,8 @@ def addWaitDecompositionRelationGroup (codes relationKey : List Nat)
       witness.pathology == .waitSuppression
     let hasAmbiguity := pathologyWitnesses.any fun witness =>
       witness.pathology == .redundantAmbiguity
+    let profileRepresentative :=
+      pathologyProfileRepresentative tiles waits pathologyWitnesses
     let rec add : List WaitDecompositionRelationGroup → List WaitDecompositionRelationGroup
       | [] => [{
           codes, relationKey, count := 1,
@@ -394,7 +431,8 @@ def addWaitDecompositionRelationGroup (codes relationKey : List Nat)
           redundantAmbiguityCount := if hasAmbiguity then 1 else 0,
           bothPathologiesCount := if hasSuppression && hasAmbiguity then 1 else 0,
           representativeTiles := tiles, representativeWaits := waits,
-          relationDescription := description
+          relationDescription := description,
+          pathologyProfileRepresentatives := [profileRepresentative]
         }]
       | group :: rest =>
           if group.codes == codes && group.relationKey == relationKey then
@@ -406,6 +444,9 @@ def addWaitDecompositionRelationGroup (codes relationKey : List Nat)
                 group.redundantAmbiguityCount + if hasAmbiguity then 1 else 0
               bothPathologiesCount :=
                 group.bothPathologiesCount + if hasSuppression && hasAmbiguity then 1 else 0
+              pathologyProfileRepresentatives :=
+                addPathologyProfileRepresentative profileRepresentative
+                  group.pathologyProfileRepresentatives
             } :: rest
           else
             group :: add rest
@@ -428,6 +469,9 @@ def mergeWaitDecompositionRelationGroups
                 group.redundantAmbiguityCount + addition.redundantAmbiguityCount
               bothPathologiesCount :=
                 group.bothPathologiesCount + addition.bothPathologiesCount
+              pathologyProfileRepresentatives :=
+                mergePathologyProfileRepresentatives group.pathologyProfileRepresentatives
+                  addition.pathologyProfileRepresentatives
             } :: rest
           else
             group :: add rest

@@ -110,7 +110,7 @@ def addShapeReport (cache : SharedWaitCoreCache)
           witnesses
           summary.irreducibleRelationGroups }
 
-private def formatMagic : String := "MJWC-CLASSIFICATION-5"
+private def formatMagic : String := "MJWC-CLASSIFICATION-6"
 
 private def encodeNats (values : List Nat) : String :=
   String.intercalate "," (values.map toString)
@@ -123,6 +123,37 @@ private def encodeTiles (tiles : List Tile) : String :=
 
 private def decodeTiles (value : String) : Option (List Tile) := do
   (← decodeNats value).mapM fun index => Tile.all[index]?
+
+private def formatProfileRepresentative
+    (representative : WaitPathologyProfileRepresentative) : String :=
+  String.intercalate ";" [
+    if representative.waitSuppression then "1" else "0",
+    if representative.redundantAmbiguity then "1" else "0",
+    encodeTiles representative.tiles,
+    encodeTiles representative.waits
+  ]
+
+private def parseProfileRepresentative
+    (value : String) : Option WaitPathologyProfileRepresentative := do
+  match value.splitOn ";" with
+  | [suppression, ambiguity, tiles, waits] =>
+      guard (suppression == "0" || suppression == "1")
+      guard (ambiguity == "0" || ambiguity == "1")
+      return {
+        waitSuppression := suppression == "1"
+        redundantAmbiguity := ambiguity == "1"
+        tiles := ← decodeTiles tiles
+        waits := ← decodeTiles waits
+      }
+  | _ => none
+
+private def formatProfileRepresentatives
+    (representatives : List WaitPathologyProfileRepresentative) : String :=
+  String.intercalate "|" (representatives.map formatProfileRepresentative)
+
+private def parseProfileRepresentatives
+    (value : String) : Option (List WaitPathologyProfileRepresentative) :=
+  if value.isEmpty then some [] else value.splitOn "|" |>.mapM parseProfileRepresentative
 
 private def formatGroup (group : WaitDecompositionCodeGroup) : String :=
   String.intercalate "\t" [
@@ -153,12 +184,14 @@ private def formatRelationGroup (group : WaitDecompositionRelationGroup) : Strin
     toString group.bothPathologiesCount,
     encodeTiles group.representativeTiles,
     encodeTiles group.representativeWaits,
+    formatProfileRepresentatives group.pathologyProfileRepresentatives,
     group.relationDescription
   ]
 
 private def parseRelationGroup (line : String) : Option WaitDecompositionRelationGroup := do
   match line.splitOn "\t" with
-  | [codes, relationKey, count, suppression, ambiguity, both, tiles, waits, description] =>
+  | [codes, relationKey, count, suppression, ambiguity, both, tiles, waits,
+      profileRepresentatives, description] =>
       return {
         codes := ← decodeNats codes
         relationKey := ← decodeNats relationKey
@@ -168,6 +201,8 @@ private def parseRelationGroup (line : String) : Option WaitDecompositionRelatio
         bothPathologiesCount := ← both.toNat?
         representativeTiles := ← decodeTiles tiles
         representativeWaits := ← decodeTiles waits
+        pathologyProfileRepresentatives :=
+          ← parseProfileRepresentatives profileRepresentatives
         relationDescription := description
       }
   | _ => none

@@ -69,7 +69,17 @@ def relationGroup (group : WaitDecompositionRelationGroup) : Json :=
     ("bothPathologiesCount", natural group.bothPathologiesCount),
     ("componentRelations", string group.relationDescription),
     ("representativeTiles", string (formatTiles group.representativeTiles)),
-    ("representativeWaits", string (formatTiles group.representativeWaits))
+    ("representativeWaits", string (formatTiles group.representativeWaits)),
+    ("pathologyProfileRepresentatives", array <|
+      group.pathologyProfileRepresentatives.map fun representative =>
+        object [
+          ("profile", string <|
+            if representative.waitSuppression then
+              if representative.redundantAmbiguity then "both" else "suppressionOnly"
+            else if representative.redundantAmbiguity then "ambiguityOnly" else "healthy"),
+          ("representativeTiles", string (formatTiles representative.tiles)),
+          ("representativeWaits", string (formatTiles representative.waits))
+        ])
   ]
 
 def commonSummaryFields (codeGroups : List WaitDecompositionCodeGroup)

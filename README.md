@@ -73,6 +73,10 @@ JSON viewers preserve their exact value.
 To browse a report with Unicode Mahjong tiles, open
 [`reports/report-viewer.html`](reports/report-viewer.html) and select or drop a JSON report.
 Sections are navigated in a full-width main area, with pagination for long lists.
+For irreducible tenpai hands, the viewer uses decomposition code plus pathology
+profile (healthy, wait suppression only, redundant ambiguity only, or both) as
+its primary classification, with an exact representative hand and waits for
+each profile. Component relationships remain available as a structural refinement.
 
 All tenpai hands also receive independent pathology marks, without changing the
 existing reducibility or classification keys. Each mark tests removal of **one**
