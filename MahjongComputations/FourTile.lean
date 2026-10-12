@@ -24,6 +24,7 @@ structure FourTileShapeReport where
   reducibility : Option WaitReducibility
   waitDecompositionCodes : List Nat
   relationClassification : WaitDecompositionRelationClassification
+  pathologyWitnesses : List WaitPathologyWitness := []
 deriving BEq, DecidableEq, Repr
 
 /-- All legal four-tile shapes as sorted tile-type multisets. -/
@@ -52,7 +53,8 @@ def report (tiles : List Tile) : FourTileShapeReport :=
     waits := waitsFromCompletions completions
     reducibility
     waitDecompositionCodes := classification.1
-    relationClassification := classification.2 }
+    relationClassification := classification.2
+    pathologyWitnesses := waitPathologyWitnesses tiles }
 
 /-- Exhaustive four-tile tenpai reports. -/
 def tenpaiReports : List FourTileShapeReport :=
@@ -70,7 +72,8 @@ private def directReport (report : WaitCompletionGroup) : FourTileShapeReport :=
     waits := waitsFromCompletions completions
     reducibility := some (if reducible then .reducible else .irreducible)
     waitDecompositionCodes := classification.1
-    relationClassification := classification.2 }
+    relationClassification := classification.2
+    pathologyWitnesses := waitPathologyWitnesses report.tiles }
 
 /-- Four-tile direct reports computed with one cache shared by all shapes. -/
 def directDerivationReportsWithCache :
@@ -82,12 +85,15 @@ def directDerivationReportsWithCache :
         MahjongComputations.canReduceMentsuPreservingWaitCoresCached
           report.tiles completions cache
       let classification := irreducibleClassification (!reducible) completions
+      let (pathologyWitnesses, cache) :=
+        waitPathologyWitnessesCached report.tiles completions cache
       let result : FourTileShapeReport :=
         { tiles := report.tiles
           waits := waitsFromCompletions completions
           reducibility := some (if reducible then .reducible else .irreducible)
           waitDecompositionCodes := classification.1
-          relationClassification := classification.2 }
+          relationClassification := classification.2
+          pathologyWitnesses }
       (result :: reports, cache))
     ([], MahjongComputations.emptyWaitCoreCache)
   (reports.reverse, cache)
@@ -101,12 +107,14 @@ def directDerivationReportsParallel (workers : Nat) :
       let completions := report.completions
       let reducible ← canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
       let classification := irreducibleClassification (!reducible) completions
+      let pathologyWitnesses ← waitPathologyWitnessesShared report.tiles completions cache
       let result : FourTileShapeReport :=
         { tiles := report.tiles
           waits := waitsFromCompletions completions
           reducibility := some (if reducible then .reducible else .irreducible)
           waitDecompositionCodes := classification.1
-          relationClassification := classification.2 }
+          relationClassification := classification.2
+          pathologyWitnesses }
       return result :: results
     return reversed.reverse
   let stats ← cache.stats

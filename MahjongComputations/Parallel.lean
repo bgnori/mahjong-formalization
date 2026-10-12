@@ -163,4 +163,9 @@ def canReduceMentsuPreservingWaitCoresShared
     (cache : SharedWaitCoreCache) : BaseIO Bool :=
   canReduceMentsuPreservingWaitCoreKeysWith tiles completions cache.lookup
 
+def waitPathologyWitnessesShared
+    (tiles : List Tile) (completions : List WaitCompletion)
+    (cache : SharedWaitCoreCache) : BaseIO (List WaitDecompositionCode.WaitPathologyWitness) :=
+  WaitDecompositionCode.waitPathologyWitnessesWith tiles completions cache.lookup
+
 end MahjongComputations

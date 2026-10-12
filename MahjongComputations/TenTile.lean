@@ -35,6 +35,7 @@ structure TenTileSummary where
   irreducibleGroups : List WaitDecompositionCodeGroup
   irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
+  pathologyGroups : List WaitPathologyGroup := []
 deriving BEq, DecidableEq, Repr
 
 private def emptySummary : TenTileSummary :=
@@ -97,6 +98,7 @@ def summaryParallel (workers : Nat) (workDirectory : System.FilePath)
     waitCoreCacheEntries := stats.entries
     irreducibleGroups := computed.irreducibleGroups
     irreducibleRelationGroups := computed.irreducibleRelationGroups
+    pathologyGroups := computed.pathologyGroups
     waitTileCountDistribution := computed.waitTileCountDistribution }
 
 end MahjongComputations.TenTile

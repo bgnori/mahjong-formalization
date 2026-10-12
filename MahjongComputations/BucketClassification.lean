@@ -29,6 +29,7 @@ structure BucketSummary where
   irreducibleGroups : List WaitDecompositionCodeGroup
   irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
+  pathologyGroups : List WaitPathologyGroup := []
 deriving BEq, DecidableEq, Repr
 
 /-- Totals before any bucket has been classified. -/
@@ -74,7 +75,8 @@ def merge (first second : BucketSummary) : BucketSummary :=
       mergeWaitDecompositionRelationGroups first.irreducibleRelationGroups
         second.irreducibleRelationGroups
     waitTileCountDistribution :=
-      second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution }
+      second.waitTileCountDistribution.foldl addDistribution first.waitTileCountDistribution
+    pathologyGroups := mergeWaitPathologyGroups first.pathologyGroups second.pathologyGroups }
 
 /-- Fold one hand's wait completions into a classification summary. -/
 def addShapeReport (cache : SharedWaitCoreCache)
@@ -82,9 +84,12 @@ def addShapeReport (cache : SharedWaitCoreCache)
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let reducible ← liftM <| canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
+  let witnesses ← liftM <| waitPathologyWitnessesShared report.tiles completions cache
   let summary :=
     { summary with
       tenpaiReports := summary.tenpaiReports + 1
+      pathologyGroups := addWaitPathologyGroups report.tiles completions reducible
+        witnesses summary.pathologyGroups
       waitTileCountDistribution := incrementCount waits.length summary.waitTileCountDistribution }
   if reducible then
     return { summary with reducibleReports := summary.reducibleReports + 1 }
@@ -104,7 +109,7 @@ def addShapeReport (cache : SharedWaitCoreCache)
           (waitDecompositionRelationDescription relationClassification)
           summary.irreducibleRelationGroups }
 
-private def formatMagic : String := "MJWC-CLASSIFICATION-3"
+private def formatMagic : String := "MJWC-CLASSIFICATION-4"
 
 private def encodeNats (values : List Nat) : String :=
   String.intercalate "," (values.map toString)
@@ -168,6 +173,39 @@ private def parseDistribution (line : String) : Option (Nat × Nat) := do
   | [key, count] => return (← key.toNat?, ← count.toNat?)
   | _ => none
 
+private def formatPathologyGroup (group : WaitPathologyGroup) : String :=
+  String.intercalate "\t" [
+    encodeNats group.codes,
+    if group.reducible then "1" else "0",
+    toString group.count,
+    encodeTiles group.representativeTiles,
+    encodeTiles group.representativeWaits,
+    if group.witness.pathology == .waitSuppression then "suppression" else "ambiguity",
+    encodeTiles group.witness.remainingTiles,
+    encodeTiles group.witness.remainingWaits,
+    toString group.witness.originalCoreCount,
+    toString group.witness.remainingCoreCount
+  ]
+
+private def parsePathologyGroup (line : String) : Option WaitPathologyGroup := do
+  match line.splitOn "\t" with
+  | [codes, reducible, count, tiles, waits, kind, remaining, remainingWaits, before, after] =>
+    guard (reducible == "0" || reducible == "1")
+    let pathology ← match kind with
+      | "suppression" => some WaitPathology.waitSuppression
+      | "ambiguity" => some WaitPathology.redundantAmbiguity
+      | _ => none
+    return {
+      codes := ← decodeNats codes, reducible := reducible == "1", count := ← count.toNat?,
+      representativeTiles := ← decodeTiles tiles, representativeWaits := ← decodeTiles waits,
+      witness := {
+        pathology, remainingTiles := ← decodeTiles remaining,
+        remainingWaits := ← decodeTiles remainingWaits,
+        originalCoreCount := ← before.toNat?, remainingCoreCount := ← after.toNat?
+      }
+    }
+  | _ => none
+
 private def summaryText (mentsuCount : Nat) (summary : BucketSummary) : String :=
   String.intercalate "\n" <|
     [formatMagic,
@@ -182,6 +220,8 @@ private def summaryText (mentsuCount : Nat) (summary : BucketSummary) : String :
     summary.irreducibleRelationGroups.map formatRelationGroup ++
     [s!"distribution={summary.waitTileCountDistribution.length}"] ++
     summary.waitTileCountDistribution.map formatDistribution ++
+    [s!"pathologyGroups={summary.pathologyGroups.length}"] ++
+    summary.pathologyGroups.map formatPathologyGroup ++
     [""]
 
 private def parseField (fieldPrefix value : String) : Option Nat := do
@@ -211,6 +251,11 @@ private def parseSummary (mentsuCount : Nat) (text : String) : Option BucketSumm
   let distributionLines := (remaining.drop 1).take distributionCount
   guard (distributionLines.length == distributionCount)
   let waitTileCountDistribution ← distributionLines.mapM parseDistribution
+  let pathologyLines := remaining.drop (1 + distributionCount)
+  let pathologyCount ← pathologyLines[0]?.bind (parseField "pathologyGroups=")
+  let groupLines := (pathologyLines.drop 1).take pathologyCount
+  guard (groupLines.length == pathologyCount)
+  let pathologyGroups ← groupLines.mapM parsePathologyGroup
   return {
     tenpaiReports
     reducibleReports
@@ -219,6 +264,7 @@ private def parseSummary (mentsuCount : Nat) (text : String) : Option BucketSumm
     irreducibleGroups
     irreducibleRelationGroups
     waitTileCountDistribution
+    pathologyGroups
   }
 
 /-- Stable path holding one bucket's saved classification result. -/

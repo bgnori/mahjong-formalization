@@ -32,6 +32,7 @@ structure SevenTileSummary where
   irreducibleGroups : List WaitDecompositionCodeGroup
   irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
+  pathologyGroups : List WaitPathologyGroup := []
 deriving BEq, DecidableEq, Repr
 
 private def emptySummary : SevenTileSummary :=
@@ -61,9 +62,13 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   let waits := waitsFromCompletions completions
   let (reducible, waitCoreCache) :=
     canReduceMentsuPreservingWaitCoresCached report.tiles completions state.waitCoreCache
+  let (witnesses, waitCoreCache) :=
+    waitPathologyWitnessesCached report.tiles completions waitCoreCache
   let summary :=
     { state.summary with
       tenpaiReports := state.summary.tenpaiReports + 1
+      pathologyGroups := addWaitPathologyGroups report.tiles completions reducible
+        witnesses state.summary.pathologyGroups
       waitTileCountDistribution :=
         incrementCount waits.length state.summary.waitTileCountDistribution }
   let summary := if reducible then
@@ -87,9 +92,12 @@ private def addShapeReportShared (cache : SharedWaitCoreCache)
   let completions := report.completions
   let waits := waitsFromCompletions completions
   let reducible ← canReduceMentsuPreservingWaitCoresShared report.tiles completions cache
+  let witnesses ← waitPathologyWitnessesShared report.tiles completions cache
   let summary :=
     { summary with
       tenpaiReports := summary.tenpaiReports + 1
+      pathologyGroups := addWaitPathologyGroups report.tiles completions reducible
+        witnesses summary.pathologyGroups
       waitTileCountDistribution := incrementCount waits.length summary.waitTileCountDistribution }
   if reducible then
     return { summary with reducibleReports := summary.reducibleReports + 1 }
@@ -130,6 +138,7 @@ private def addDistribution
 private def mergeSummary (first second : SevenTileSummary) : SevenTileSummary :=
   { first with
     tenpaiReports := first.tenpaiReports + second.tenpaiReports
+    pathologyGroups := mergeWaitPathologyGroups first.pathologyGroups second.pathologyGroups
     reducibleReports := first.reducibleReports + second.reducibleReports
     irreducibleReports := first.irreducibleReports + second.irreducibleReports
     irreducibleDisjointReports :=

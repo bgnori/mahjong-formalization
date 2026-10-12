@@ -16,6 +16,34 @@ private def testHandT026 : List Tile := manzu [1, 1, 1, 1, 2, 3, 3]
 private def testHand1188 : List Tile := manzu [0, 0, 7, 7]
 private def testHand1199 : List Tile := manzu [0, 0, 8, 8]
 
+private def suppressionHand : List Tile :=
+  manzu [0, 0, 0, 0, 1, 1, 1, 1, 2, 3, 3, 3, 3]
+
+private def ambiguityHand : List Tile :=
+  Tile.numberedTiles .Pinzu [7, 8] ++
+    Tile.numberedTiles .Souzu [0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6]
+
+example :
+    waitsFromWaitCoreKeys (waitCoreKeys (findWaitCores suppressionHand)) = manzu [2] ∧
+    waitsFromWaitCoreKeys (waitCoreKeys (findWaitCores (manzu [0]))) = manzu [0] ∧
+    waitsFromWaitCoreKeys [] = [] := by native_decide
+
+example :
+    (waitPathologyWitnesses suppressionHand).any
+      (fun w => w.pathology == .waitSuppression &&
+        w.remainingWaits.length > 1) = true ∧
+    (waitPathologyWitnesses suppressionHand).any
+      (fun w => w.pathology == .redundantAmbiguity) = true ∧
+    (waitPathologyWitnesses ambiguityHand).length = 1 ∧
+    (waitPathologyWitnesses ambiguityHand).all
+      (fun w => w.pathology == .redundantAmbiguity &&
+        w.remainingWaits == Tile.numberedTiles .Pinzu [6] &&
+        w.originalCoreCount == 2 && w.remainingCoreCount == 1) = true ∧
+    waitPathologyWitnesses (manzu [0, 0, 0, 3]) = [] ∧
+    waitPathologyWitnesses testHand1234 = [] ∧
+    waitPathologyWitnesses (manzu [0]) = [] ∧
+    waitPathologyWitnesses [] = [] := by native_decide
+
 private def nineGatesComponents : List WaitComponent :=
   [{ kind := .toitsu, tiles := manzu [0, 0] },
    { kind := .shuntsu, tiles := manzu [0, 1, 2] },

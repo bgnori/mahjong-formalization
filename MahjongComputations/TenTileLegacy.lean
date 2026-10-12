@@ -36,9 +36,13 @@ private def addShapeReport (report : WaitCompletionGroup) (state : ComputationSt
   let waits := waitsFromCompletions completions
   let (reducible, waitCoreCache) :=
     canReduceMentsuPreservingWaitCoresCached report.tiles completions state.waitCoreCache
+  let (witnesses, waitCoreCache) :=
+    waitPathologyWitnessesCached report.tiles completions waitCoreCache
   let summary :=
     { state.summary with
       tenpaiReports := state.summary.tenpaiReports + 1
+      pathologyGroups := addWaitPathologyGroups report.tiles completions reducible
+        witnesses state.summary.pathologyGroups
       waitTileCountDistribution :=
         incrementCount waits.length state.summary.waitTileCountDistribution }
   let summary := if reducible then

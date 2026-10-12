@@ -72,9 +72,10 @@ private def reportJson (result : ThirteenTileRunResult) (elapsedMs : Nat) : Json
       ("entries", natural summary.waitCoreCacheEntries)
     ])
   ] ++ commonSummaryFields summary.irreducibleGroups summary.irreducibleRelationGroups
-      summary.reducibleReports summary.irreducibleReports summary.irreducibleDisjointReports)
+      summary.reducibleReports summary.irreducibleReports summary.irreducibleDisjointReports
+    ++ pathologySummaryFields summary.pathologyGroups)
     (commonDataFields summary.irreducibleGroups summary.irreducibleRelationGroups
-      summary.waitTileCountDistribution)
+      summary.waitTileCountDistribution ++ pathologyDataFields summary.pathologyGroups)
 
 def run (args : List String) : IO UInt32 := do
   let options ← parseArgs args

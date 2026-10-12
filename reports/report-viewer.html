@@ -419,6 +419,12 @@
       metrics.append(metric("細分類を持つコード群", formatNumber(summary.waitDecompositionCodesWithMultipleRelationGroups)));
       metrics.append(metric("そのコード群に属する牌姿数", formatNumber(summary.irreducibleReportsInThoseCodeGroups)));
     }
+    if (summary.pathologies) {
+      metrics.append(
+        metric("待ち抑制", formatNumber(summary.pathologies.waitSuppression)),
+        metric("冗長曖昧性", formatNumber(summary.pathologies.redundantAmbiguity))
+      );
+    }
     return metrics;
   }
 
@@ -634,6 +640,46 @@
     return section;
   }
 
+  function pathologyPanel(groups) {
+    const section = panel(`病的構造の分類 (${formatNumber(groups.length)})`);
+    section.append(element("p", "hint",
+      "完成面子を1つ除去して待ち集合が真に拡大するものを「待ち抑制」、待ち集合を保ち待ち核集合だけが真に縮小するものを「冗長曖昧性」と表示します。可約・既約の両方を対象とし、2つのマークは重複し得ます。"));
+    const filter = element("select");
+    filter.setAttribute("aria-label", "病的構造の種類");
+    for (const [value, label] of [["", "すべて"], ["waitSuppression", "待ち抑制"],
+        ["redundantAmbiguity", "冗長曖昧性"]]) {
+      const option = element("option", "", label);
+      option.value = value;
+      filter.append(option);
+    }
+    const controls = element("div", "controls");
+    controls.append(filter);
+    const tableHolder = element("div");
+    section.append(controls, tableHolder);
+    const renderRows = () => {
+      const rows = groups.filter(group => !filter.value || group.pathology === filter.value);
+      tableHolder.replaceChildren(paginatedTable([
+        {label: "マーク"}, {label: "待ち分解コード"}, {label: "分類"},
+        {label: "件数", numeric: true}, {label: "代表牌姿"}, {label: "待ち"},
+        {label: "除去面子"}, {label: "除去後牌姿"}, {label: "除去後待ち"}, {label: "待ち核数"},
+      ], rows.map(group => [
+        {text: group.pathology === "waitSuppression" ? "待ち抑制" : "冗長曖昧性", sortValue: group.pathology},
+        {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes},
+        {text: group.reducibility === "reducible" ? "可約" : "既約", sortValue: group.reducibility},
+        {text: formatNumber(group.count), sortValue: group.count, className: "number"},
+        {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
+        {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
+        {node: tileDisplay(group.removedComponent, true), sortValue: group.removedComponent},
+        {node: tileDisplay(group.remainingTiles, true), sortValue: group.remainingTiles},
+        {node: tileDisplay(group.remainingWaits, true), sortValue: group.remainingWaits},
+        {text: `${group.originalCoreCount} → ${group.remainingCoreCount}`, sortValue: group.originalCoreCount},
+      ])));
+    };
+    filter.addEventListener("change", renderRows);
+    renderRows();
+    return section;
+  }
+
   function render(data, sourceName) {
     if (!data || data.reportType !== "mahjong-wait-report" || ![1, 2].includes(data.schemaVersion) ||
         !Number.isInteger(data.tileCount) || !data.summary) {
@@ -669,6 +715,9 @@
     ];
     if (Array.isArray(data.componentRelationGroups)) {
       sections.splice(1, 0, classificationCountPanel(data));
+    }
+    if (Array.isArray(data.pathologyGroups)) {
+      sections.push(pathologyPanel(data.pathologyGroups));
     }
     if (data.schemaVersion < 2 && Array.isArray(data.tenpaiShapes)) {
       sections.push(shapesPanel(data.tenpaiShapes));

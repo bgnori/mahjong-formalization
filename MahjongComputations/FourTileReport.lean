@@ -32,6 +32,11 @@ private def reportJson
       (waitDecompositionRelationDescription shape.relationClassification) groups) []
   let disjointReports := (irreducibleReports.filter fun shape =>
     hasDisjointComponentRelation shape.relationClassification).length
+  let pathologyGroups := directReports.foldl (fun groups shape =>
+    if shape.pathologyWitnesses.isEmpty then groups else
+      addWaitPathologyGroups shape.tiles
+        (WaitCompletionFinder.findWaitCompletions shape.tiles)
+        (shape.reducibility == some .reducible) shape.pathologyWitnesses groups) []
   let commonSummary := commonSummaryFields irreducibleGroups irreducibleRelationGroups
     (reportsByReducibility directReports .reducible).length irreducibleReports.length disjointReports
   let commonData := commonDataFields irreducibleGroups irreducibleRelationGroups
@@ -45,7 +50,8 @@ private def reportJson
       ("misses", natural cache.misses),
       ("entries", natural cache.entries)
     ])
-  ] ++ commonSummary) (commonData)
+  ] ++ commonSummary ++ pathologySummaryFields pathologyGroups)
+    (commonData ++ pathologyDataFields pathologyGroups)
 
 def run (args : List String) : IO UInt32 := do
   let (workers, outputPath) ←

@@ -35,6 +35,7 @@ structure ThirteenTileSummary where
   irreducibleGroups : List WaitDecompositionCodeGroup
   irreducibleRelationGroups : List WaitDecompositionRelationGroup
   waitTileCountDistribution : List (Nat × Nat)
+  pathologyGroups : List WaitPathologyGroup := []
 deriving BEq, DecidableEq, Repr
 
 private def emptySummary : ThirteenTileSummary :=
@@ -105,6 +106,7 @@ def summaryParallel (generationWorkers classificationWorkers : Nat)
       waitCoreCacheEntries := stats.entries
       irreducibleGroups := computed.irreducibleGroups
       irreducibleRelationGroups := computed.irreducibleRelationGroups
+      pathologyGroups := computed.pathologyGroups
       waitTileCountDistribution := computed.waitTileCountDistribution }
     generationReused
   }

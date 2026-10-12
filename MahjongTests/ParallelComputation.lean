@@ -1,6 +1,8 @@
 import MahjongComputations.Parallel
 import MahjongComputations.ExternalWaitCompletion
 import MahjongComputations.ThirteenTile
+import MahjongComputations.FourTile
+import MahjongComputations.SevenTile
 
 namespace MahjongTests.ParallelComputation
 
@@ -126,8 +128,46 @@ private def testThirteenTileGenerationReuse : IO Unit := do
       "unexpected thirteen-tile legal shape count"
   finally
     ExternalWaitCompletion.clearGenerationCheckpoint directory
+    BucketClassification.clearResults paths
     paths.forM IO.FS.removeFile
     IO.FS.removeDir directory
+
+private def testPathologyReports : IO Unit := do
+  let (four, _) ← FourTile.directDerivationReportsParallel 2
+  ensure (four == FourTile.directDerivationReportsWithCache.1)
+    "four-tile pure and parallel classifications differ"
+  ensure ((four.filter fun shape => shape.pathologyWitnesses.any
+    (fun w => w.pathology == .redundantAmbiguity)).length == 27)
+    "unexpected four-tile redundant ambiguity count"
+  ensure (four.all fun shape => shape.pathologyWitnesses.all
+    (fun w => w.pathology != .waitSuppression))
+    "unexpected four-tile wait suppression"
+  let seven ← SevenTile.summaryParallel 2
+  ensure (seven == SevenTile.summary ())
+    "seven-tile pure and parallel classifications differ"
+  let count := fun kind => seven.pathologyGroups.foldl (fun total group =>
+    total + if group.witness.pathology == kind then group.count else 0) 0
+  ensure (count .waitSuppression == 126 && count .redundantAmbiguity == 3636)
+    "unexpected seven-tile pathology counts"
+
+private def testPathologyCheckpoint : IO Unit := do
+  let path : System.FilePath := ".lake/build/pathology-checkpoint-test.bin"
+  let tiles := manzu [0, 1, 1, 2]
+  let group : WaitCompletionGroup := { tiles, completions := findWaitCompletions tiles }
+  let cache ← SharedWaitCoreCache.new
+  let summary ← BucketClassification.addShapeReport cache BucketClassification.empty group
+  ensure (!summary.pathologyGroups.isEmpty) "checkpoint test needs a pathology witness"
+  try
+    BucketClassification.writeResult path 1 summary
+    ensure ((← BucketClassification.readResult path 1) == some summary)
+      "pathology checkpoint failed to round trip"
+    ensure ((← BucketClassification.readResult path 2).isNone)
+      "pathology checkpoint accepted a different mentsu count"
+    IO.FS.writeFile (BucketClassification.resultPath path) "MJWC-CLASSIFICATION-3\n"
+    ensure ((← BucketClassification.readResult path 1).isNone)
+      "old classification checkpoint was reused without pathology data"
+  finally
+    BucketClassification.clearResults [path]
 
 def run : IO UInt32 := do
   testPartitionedCanonicalGeneration
@@ -135,6 +175,8 @@ def run : IO UInt32 := do
   testExternalBucketFile
   testParallelBucketGeneration
   testThirteenTileGenerationReuse
+  testPathologyReports
+  testPathologyCheckpoint
   let cache ← SharedWaitCoreCache.new
   let tasks ← (List.range 8).mapM fun _ =>
     BaseIO.asTask (do

@@ -36,12 +36,13 @@
  "tileCount": 4,
  "summary":
  {"waitDecompositionCodesWithMultipleRelationGroups": 0,
-  "waitCoreCache": {"misses": 34, "hits": 1802, "entries": 34},
+  "waitCoreCache": {"misses": 34, "hits": 3638, "entries": 34},
   "tenpaiReports": 3756,
   "reducibility":
   {"withDisjointComponentRelations": 2109,
    "reducible": 1647,
    "irreducible": 2109},
+  "pathologies": {"waitSuppression": 0, "redundantAmbiguity": 27},
   "irreducibleReportsInThoseCodeGroups": 0,
   "irreducibleRelationGroupCount": 11,
   "enumeratedDerivations": 5100,
@@ -61,6 +62,29 @@
   {"waitDecompositionCodes": [21, 26], "refinedGroupCount": 1},
   {"waitDecompositionCodes": [26, 33], "refinedGroupCount": 1},
   {"waitDecompositionCodes": [26, 26], "refinedGroupCount": 1}],
+ "pathologyGroups":
+ [{"waitDecompositionCodes": [21, 26],
+   "representativeWaits": "5p",
+   "representativeTiles": "4556p",
+   "removedComponent": "456p",
+   "remainingWaits": "5p",
+   "remainingTiles": "5p",
+   "remainingCoreCount": 1,
+   "reducibility": "irreducible",
+   "pathology": "redundantAmbiguity",
+   "originalCoreCount": 2,
+   "count": 21},
+  {"waitDecompositionCodes": [26, 33],
+   "representativeWaits": "7s",
+   "representativeTiles": "7789s",
+   "removedComponent": "789s",
+   "remainingWaits": "7s",
+   "remainingTiles": "7s",
+   "remainingCoreCount": 1,
+   "reducibility": "irreducible",
+   "pathology": "redundantAmbiguity",
+   "originalCoreCount": 2,
+   "count": 6}],
  "irreducibleGroupsByWaitDecompositionCodes":
  [{"waitDecompositionCodesKey": "7137",
    "waitDecompositionCodes": [9, 9],
@@ -182,4 +206,4 @@
    "count": 18,
    "componentRelations":
    "26: tanki-shuntsu=disjoint | 26: tanki-shuntsu=disjoint"}],
- "calculationElapsedMs": 58}
+ "calculationElapsedMs": 55}

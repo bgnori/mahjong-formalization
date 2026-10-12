@@ -387,6 +387,63 @@ def waitCoreKey (core : WaitCore) : Nat :=
 def waitCoreKeys (cores : List WaitCore) : List Nat :=
   cores.map waitCoreKey
 
+/-- Recover the wait tile kinds from exact core keys (including cached keys). -/
+def waitsFromWaitCoreKeys (keys : List Nat) : List Tile :=
+  Tile.all.filter fun tile =>
+    keys.any fun key => key / decompositionWaitKeyStride == tile.orderKey
+
+/-- Pathologies are independent of wait-core reducibility and may coexist. -/
+inductive WaitPathology
+| waitSuppression
+| redundantAmbiguity
+deriving BEq, DecidableEq, Repr
+
+structure WaitPathologyWitness where
+  pathology : WaitPathology
+  remainingTiles : List Tile
+  remainingWaits : List Tile
+  originalCoreCount : Nat
+  remainingCoreCount : Nat
+deriving BEq, DecidableEq, Repr
+
+/--
+Inspect single completed-mentsu removals. Suppression strictly enlarges the wait
+set; redundant ambiguity preserves waits but strictly shrinks the core set.
+Keep one witness per mark, even if several removals exhibit it.
+-/
+def waitPathologyWitnessesWith {m : Type → Type} [Monad m]
+    (tiles : List Tile) (completions : List WaitCompletion)
+    (lookup : List Tile → m (Option (List Nat))) : m (List WaitPathologyWitness) := do
+  let originalCores := waitCoreKeys (waitCores completions)
+  let originalWaits := waitsFromWaitCoreKeys originalCores
+  if originalWaits.isEmpty then return []
+  (mentsuReductions tiles).foldlM (init := []) fun witnesses remaining => do
+    match ← lookup remaining with
+    | none => return witnesses
+    | some cores =>
+      let waits := waitsFromWaitCoreKeys cores
+      let pathology :=
+        if originalWaits.all waits.contains && waits.length > originalWaits.length then
+          some WaitPathology.waitSuppression
+        else if waits == originalWaits && cores.length < originalCores.length &&
+            cores.all originalCores.contains then
+          some WaitPathology.redundantAmbiguity
+        else none
+      match pathology with
+      | none => return witnesses
+      | some kind =>
+        if witnesses.any (fun witness => witness.pathology == kind) then return witnesses
+        return witnesses ++ [{
+          pathology := kind, remainingTiles := remaining, remainingWaits := waits,
+          originalCoreCount := originalCores.length, remainingCoreCount := cores.length
+        }]
+
+/-- Uncached reference implementation for individual hands and regression tests. -/
+def waitPathologyWitnesses (tiles : List Tile) : List WaitPathologyWitness :=
+  Id.run <| waitPathologyWitnessesWith tiles (findWaitCompletions tiles) fun remaining =>
+    let completions := findWaitCompletions remaining
+    pure <| if completions.isEmpty then none else some (waitCoreKeys (waitCores completions))
+
 /--
 発見済みの具体牌付き待ち分解から各部品の牌種列を忘れ、部品種別だけの待ち分解へ変換する。
 

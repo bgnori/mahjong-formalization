@@ -22,6 +22,34 @@ def string (value : String) : Json :=
 def naturalArray (values : List Nat) : Json :=
   array (values.map natural)
 
+def pathologyName : WaitPathology → String
+  | .waitSuppression => "waitSuppression"
+  | .redundantAmbiguity => "redundantAmbiguity"
+
+def pathologySummaryFields (groups : List WaitPathologyGroup) : List (String × Json) :=
+  [("pathologies", object <|
+    [WaitPathology.waitSuppression, .redundantAmbiguity].map fun kind =>
+      (pathologyName kind, natural <|
+        groups.foldl (fun count group =>
+          count + if group.witness.pathology == kind then group.count else 0) 0))]
+
+def pathologyDataFields (groups : List WaitPathologyGroup) : List (String × Json) :=
+  [("pathologyGroups", array <| groups.map fun group =>
+    object [
+      ("pathology", string (pathologyName group.witness.pathology)),
+      ("waitDecompositionCodes", naturalArray group.codes),
+      ("reducibility", string (if group.reducible then "reducible" else "irreducible")),
+      ("count", natural group.count),
+      ("representativeTiles", string (formatTiles group.representativeTiles)),
+      ("representativeWaits", string (formatTiles group.representativeWaits)),
+      ("removedComponent", string <|
+        formatTiles (group.representativeTiles.diff group.witness.remainingTiles)),
+      ("remainingTiles", string (formatTiles group.witness.remainingTiles)),
+      ("remainingWaits", string (formatTiles group.witness.remainingWaits)),
+      ("originalCoreCount", natural group.witness.originalCoreCount),
+      ("remainingCoreCount", natural group.witness.remainingCoreCount)
+    ])]
+
 def codeGroup (group : WaitDecompositionCodeGroup) : Json :=
   object [
     ("waitDecompositionCodes", naturalArray group.codes),

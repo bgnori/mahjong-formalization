@@ -74,6 +74,24 @@ To browse a report with Unicode Mahjong tiles, open
 [`reports/report-viewer.html`](reports/report-viewer.html) and select or drop a JSON report.
 Sections are navigated in a full-width main area, with pagination for long lists.
 
+All tenpai hands also receive independent pathology marks, without changing the
+existing reducibility or classification keys. Each mark tests removal of **one**
+completed sequence or triplet, comparing sets of wait tile kinds:
+
+- **Wait suppression** (`waitSuppression`): removal strictly enlarges the wait
+  set. Removing `111m` from `1111222234444m` changes the waits from `3m` to `13m`.
+- **Redundant ambiguity** (`redundantAmbiguity`): removal preserves the wait set
+  but strictly shrinks the wait-core set. Removing `111s` from
+  `89p11123456777s` preserves `7p` while reducing two cores to one.
+
+The marks can coexist (the first example has both), and cover reducible as well
+as irreducible hands. `summary.pathologies` counts marked hands;
+`pathologyGroups` groups them by mark, decomposition codes, and reducibility,
+with a representative hand and a removal witness. The viewer includes a
+filterable pathology section. Older v2 reports remain readable; regenerate them
+to see these fields. Old ten-/thirteen-tile classification checkpoints are
+reclassified from the existing generation buckets.
+
 ### GCP Batch pilot
 
 The four-, seven-, ten-, and thirteen-tile reports can all be run through the
