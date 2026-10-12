@@ -422,6 +422,52 @@
     return metrics;
   }
 
+  function waitTileKindCount(notation) {
+    const kinds = new Set();
+    for (const match of (notation || "").matchAll(/([1-9]+)([mpsz])/g)) {
+      for (const rank of match[1]) kinds.add(`${rank}${match[2]}`);
+    }
+    return kinds.size;
+  }
+
+  function classificationCountsByWaitTileKinds(data) {
+    const counts = new Map();
+    for (const group of data.componentRelationGroups || []) {
+      const kinds = waitTileKindCount(group.representativeWaits);
+      counts.set(kinds, (counts.get(kinds) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0] - b[0]);
+  }
+
+  function classificationCountPanel(data) {
+    const counts = classificationCountsByWaitTileKinds(data);
+    const section = panel("待ち牌種数と分類数");
+    section.append(makeTable([
+      {label: "待ち牌種数"},
+      {label: "分類数", numeric: true},
+    ], counts.map(([waitTileKinds, classificationCount]) => [
+      {text: `${waitTileKinds} 種`, sortValue: waitTileKinds},
+      {text: formatNumber(classificationCount), sortValue: classificationCount, className: "number"},
+    ])));
+    return section;
+  }
+
+  function waitTileKindFilter(groups) {
+    const filter = element("select");
+    filter.setAttribute("aria-label", "待ち牌種数で絞り込み");
+    filter.append(element("option", "", "すべての待ち牌種数"));
+    filter.firstChild.value = "";
+    const counts = [...new Set(groups.map(group =>
+      waitTileKindCount(group.representativeWaits)
+    ))].sort((a, b) => a - b);
+    for (const count of counts) {
+      const option = element("option", "", `${count} 種`);
+      option.value = String(count);
+      filter.append(option);
+    }
+    return filter;
+  }
+
   function distributionPanel(data) {
     const section = panel("待ち牌の種類数ごとの聴牌牌姿数");
     const distribution = data.waitTileCountDistribution || [];
@@ -451,7 +497,8 @@
     search.type = "search";
     search.placeholder = "牌姿・待ち・コードで絞り込み";
     search.setAttribute("aria-label", "既約グループの検索");
-    controls.append(search);
+    const waitKindFilter = waitTileKindFilter(groups);
+    controls.append(search, waitKindFilter);
     section.append(controls);
     const tableHolder = element("div");
     section.append(tableHolder);
@@ -459,8 +506,10 @@
     const renderRows = () => {
       const query = search.value.trim().toLowerCase();
       const rows = groups.filter(group =>
-        `${codeLabel(group.waitDecompositionCodes)} ${group.waitDecompositionCodesKey || ""} ` +
-        `${group.representativeTiles || ""} ${group.representativeWaits || ""}`.toLowerCase().includes(query)
+        (waitKindFilter.value === "" ||
+          waitTileKindCount(group.representativeWaits) === Number(waitKindFilter.value)) &&
+        (`${codeLabel(group.waitDecompositionCodes)} ${group.waitDecompositionCodesKey || ""} ` +
+          `${group.representativeTiles || ""} ${group.representativeWaits || ""}`).toLowerCase().includes(query)
       ).map(group => [
         { text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list" },
         { text: String(group.waitDecompositionCodesKey ?? ""), sortValue: group.waitDecompositionCodesKey, className: "code-list" },
@@ -477,37 +526,74 @@
       ], rows));
     };
     search.addEventListener("input", renderRows);
+    waitKindFilter.addEventListener("change", renderRows);
     renderRows();
     return section;
   }
 
   function relationPanel(title, groups) {
     const section = panel(`${title} (${formatNumber(groups.length)})`);
-    section.append(paginatedTable([
-      {label: "待ち分解コード"},
-      {label: "件数", numeric: true},
-      {label: "部品関係"},
-      {label: "代表牌姿"},
-      {label: "待ち"},
-    ], groups.map(group => [
-      {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
-      {text: formatNumber(group.count), sortValue: group.count, className: "number"},
-      {text: group.componentRelations || "", sortValue: group.componentRelations || ""},
-      {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
-      {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
-    ])));
+    const filter = waitTileKindFilter(groups);
+    const controls = element("div", "controls");
+    controls.append(filter);
+    section.append(controls);
+    const tableHolder = element("div");
+    section.append(tableHolder);
+    const renderRows = () => {
+      const visibleGroups = groups.filter(group =>
+        filter.value === "" ||
+        waitTileKindCount(group.representativeWaits) === Number(filter.value)
+      );
+      tableHolder.replaceChildren(paginatedTable([
+        {label: "待ち分解コード"},
+        {label: "件数", numeric: true},
+        {label: "部品関係"},
+        {label: "代表牌姿"},
+        {label: "待ち"},
+      ], visibleGroups.map(group => [
+        {text: codeLabel(group.waitDecompositionCodes), sortValue: group.waitDecompositionCodes, className: "code-list"},
+        {text: formatNumber(group.count), sortValue: group.count, className: "number"},
+        {text: group.componentRelations || "", sortValue: group.componentRelations || ""},
+        {node: tileDisplay(group.representativeTiles, true), sortValue: group.representativeTiles},
+        {node: tileDisplay(group.representativeWaits, true), sortValue: group.representativeWaits},
+      ])));
+    };
+    filter.addEventListener("change", renderRows);
+    renderRows();
     return section;
   }
 
-  function refinementsPanel(refinements) {
+  function refinementsPanel(refinements, codeGroups) {
     const section = panel(`部品関係による細分類 (${formatNumber(refinements.length)})`);
-    section.append(paginatedTable([
-      {label: "待ち分解コード"},
-      {label: "細分類数", numeric: true},
-    ], refinements.map(item => [
-      {text: codeLabel(item.waitDecompositionCodes), sortValue: item.waitDecompositionCodes, className: "code-list"},
-      {text: formatNumber(item.refinedGroupCount), sortValue: item.refinedGroupCount, className: "number"},
-    ])));
+    const filterGroups = refinements.map(item => ({
+      representativeWaits: codeGroups.find(group =>
+        JSON.stringify(group.waitDecompositionCodes) === JSON.stringify(item.waitDecompositionCodes)
+      )?.representativeWaits || "",
+    }));
+    const filter = waitTileKindFilter(filterGroups);
+    const controls = element("div", "controls");
+    controls.append(filter);
+    section.append(controls);
+    const tableHolder = element("div");
+    section.append(tableHolder);
+    const renderRows = () => {
+      const rows = refinements.filter(item => {
+        const group = codeGroups.find(candidate =>
+          JSON.stringify(candidate.waitDecompositionCodes) === JSON.stringify(item.waitDecompositionCodes)
+        );
+        return filter.value === "" ||
+          waitTileKindCount(group?.representativeWaits) === Number(filter.value);
+      }).map(item => [
+        {text: codeLabel(item.waitDecompositionCodes), sortValue: item.waitDecompositionCodes, className: "code-list"},
+        {text: formatNumber(item.refinedGroupCount), sortValue: item.refinedGroupCount, className: "number"},
+      ]);
+      tableHolder.replaceChildren(paginatedTable([
+        {label: "待ち分解コード"},
+        {label: "細分類数", numeric: true},
+      ], rows));
+    };
+    filter.addEventListener("change", renderRows);
+    renderRows();
     return section;
   }
 
@@ -517,12 +603,18 @@
     search.type = "search";
     search.placeholder = "牌姿・待ちで絞り込み";
     search.setAttribute("aria-label", "聴牌牌姿の検索");
-    section.append(search);
+    const filter = waitTileKindFilter(shapes.map(shape => ({
+      representativeWaits: shape.waits,
+    })));
+    const controls = element("div", "controls");
+    controls.append(search, filter);
+    section.append(controls);
     const tableHolder = element("div");
     section.append(tableHolder);
     const renderRows = () => {
       const query = search.value.trim().toLowerCase();
       const rows = shapes.filter(shape =>
+        (filter.value === "" || waitTileKindCount(shape.waits) === Number(filter.value)) &&
         `${shape.tiles || ""} ${shape.waits || ""} ${shape.reducibility || ""} ${codeLabel(shape.waitDecompositionCodes)}`.toLowerCase().includes(query)
       ).map(shape => [
         {node: tileDisplay(shape.tiles), sortValue: shape.tiles},
@@ -538,6 +630,7 @@
       ], rows));
     };
     search.addEventListener("input", renderRows);
+    filter.addEventListener("change", renderRows);
     return section;
   }
 
@@ -568,11 +661,15 @@
       overview,
       distributionPanel(data),
       groupPanel(data),
-      refinementsPanel(data.relationRefinements || []),
+      refinementsPanel(data.relationRefinements || [],
+        data.irreducibleGroupsByWaitDecompositionCodes || []),
       relationPanel("待ち分解コードと部品関係の全分類", data.componentRelationGroups || []),
       relationPanel("複数の部品関係を持つグループの代表牌姿",
         data.representativeHandsInSplitGroups || []),
     ];
+    if (Array.isArray(data.componentRelationGroups)) {
+      sections.splice(1, 0, classificationCountPanel(data));
+    }
     if (data.schemaVersion < 2 && Array.isArray(data.tenpaiShapes)) {
       sections.push(shapesPanel(data.tenpaiShapes));
     }
