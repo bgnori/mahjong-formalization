@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>麻雀レポートビューア</title>
+  <title>麻雀待ち形 全列挙レポート</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -42,8 +42,28 @@
       background: var(--surface);
     }
     .toolbar { padding: 1rem; margin-bottom: 1rem; }
+    .toolbar > summary { cursor: pointer; font-weight: 650; }
+    .toolbar[open] > summary { margin-bottom: 1rem; }
     .toolbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
     .toolbar-row + .toolbar-row { margin-top: .75rem; }
+    .report-picker { margin-bottom: 1rem; }
+    .report-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: .7rem;
+    }
+    .report-option {
+      min-height: 5.5rem;
+      padding: .8rem;
+      text-align: left;
+    }
+    .report-option strong, .report-option span { display: block; }
+    .report-option span { margin-top: .25rem; color: var(--muted); font-size: .85rem; }
+    .report-option[aria-pressed="true"] {
+      border-color: var(--accent);
+      background: var(--surface-alt);
+      color: var(--accent);
+    }
     button, input, select {
       min-height: 2.65rem;
       border: 1px solid var(--border);
@@ -160,11 +180,35 @@
 <body>
 <main>
   <header>
-    <h1>麻雀レポートビューア</h1>
-    <p class="hint">生成されたJSONを読み込み、牌姿をUnicode牌で表示します。画像データや外部ライブラリは使用しません。</p>
+    <h1>麻雀待ち形 全列挙レポート</h1>
+    <p>Lean 4で形式化した通常形の待ちを全列挙し、待ちの種類、可約性、病的構造などを分類した計算結果です。</p>
+    <p class="hint">牌姿はUnicode麻雀牌と一般的な文字表記を併記します。画像データや外部ライブラリは使用しません。</p>
   </header>
 
-  <section class="toolbar" aria-label="レポートの読み込み">
+  <section class="panel report-picker" aria-labelledby="report-picker-title">
+    <h2 id="report-picker-title">見るレポートを選ぶ</h2>
+    <div class="report-options">
+      <button class="report-option" type="button" data-report="4" aria-pressed="false">
+        <strong>4枚形</strong>
+        <span>最小の待ち形を全列挙</span>
+      </button>
+      <button class="report-option" type="button" data-report="7" aria-pressed="false">
+        <strong>7枚形</strong>
+        <span>面子を含む待ち形を分類</span>
+      </button>
+      <button class="report-option" type="button" data-report="10" aria-pressed="false">
+        <strong>10枚形</strong>
+        <span>より複雑な重なりを分類</span>
+      </button>
+      <button class="report-option" type="button" data-report="13" aria-pressed="false">
+        <strong>13枚形</strong>
+        <span>通常形の実戦的な枚数を分類</span>
+      </button>
+    </div>
+  </section>
+
+  <details class="toolbar">
+    <summary>手元のJSONレポートを開く</summary>
     <div class="toolbar-row">
       <label for="file-input">JSONを選択:</label>
       <input id="file-input" type="file" accept=".json,application/json">
@@ -175,11 +219,15 @@
       <input id="url-input" type="url" placeholder="../reports/four-tile-direct-report.json" autocomplete="url">
       <button id="load-url" type="button">URLから読み込む</button>
     </div>
-    <p id="status" role="status" aria-live="polite">JSONファイルを選択するか、ここにドロップしてください。</p>
-  </section>
+  </details>
+
+  <p id="status" role="status" aria-live="polite">レポートを読み込んでいます。</p>
 
   <div id="report" hidden></div>
-  <footer>牌姿の表記例: <span class="code-list">123m456p789s1234z</span>。字牌は東南西北白發中の順です。</footer>
+  <footer>
+    牌姿の表記例: <span class="code-list">123m456p789s1234z</span>。字牌は東南西北白發中の順です。
+    <a href="https://github.com/bgnori/mahjong-formalization">計算方法とソースコード</a>
+  </footer>
 </main>
 
 <script>
@@ -190,6 +238,15 @@
   const reportRoot = $("#report");
   const numberFormat = new Intl.NumberFormat("ja-JP");
   const pageSize = 25;
+  const builtInReports = {
+    "4": {source: "four-tile-direct-report.json", label: "4枚形 公開レポート"},
+    "7": {source: "seven-tile-report.json", label: "7枚形 公開レポート"},
+    "10": {source: "ten-tile-report.json", label: "10枚形 公開レポート"},
+    "13": {
+      source: "thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json",
+      label: "13枚形 公開レポート"
+    }
+  };
   const suitBases = { m: 0x1f007, p: 0x1f019, s: 0x1f010 };
   const honors = [0x1f000, 0x1f001, 0x1f002, 0x1f003, 0x1f006, 0x1f005, 0x1f004];
   const honorNames = ["東", "南", "西", "北", "白", "發", "中"];
@@ -204,6 +261,12 @@
   function setStatus(message, isError = false) {
     status.textContent = message;
     status.classList.toggle("error", isError);
+  }
+
+  function selectBuiltInReport(reportId) {
+    document.querySelectorAll("[data-report]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.report === reportId));
+    });
   }
 
   function formatNumber(value) {
@@ -930,6 +993,7 @@
   async function loadFile(file) {
     if (!file) return;
     try {
+      selectBuiltInReport(null);
       const data = JSON.parse(await file.text());
       render(data, file.name);
       setStatus(`${file.name} を読み込みました。`);
@@ -954,30 +1018,52 @@
   }
   dropZone.addEventListener("drop", event => loadFile(event.dataTransfer.files[0]));
 
-  async function loadUrl() {
-    const source = $("#url-input").value.trim();
+  async function loadUrl(source = $("#url-input").value.trim(), reportId = null, sourceName = source) {
     if (!source) {
       setStatus("JSONのURLを入力してください。", true);
       return;
     }
+    selectBuiltInReport(reportId);
+    setStatus(`${sourceName}を読み込んでいます。`);
     try {
       const response = await fetch(source);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      render(await response.json(), source);
-      setStatus(`${source} を読み込みました。`);
+      render(await response.json(), sourceName);
+      setStatus(`${sourceName}を読み込みました。`);
     } catch (error) {
       setStatus(`URLから読み込めませんでした: ${error.message}。ローカルファイルは選択またはドロップしてください。`, true);
     }
   }
-  $("#load-url").addEventListener("click", loadUrl);
+  $("#load-url").addEventListener("click", () => loadUrl());
   $("#url-input").addEventListener("keydown", event => {
     if (event.key === "Enter") loadUrl();
   });
 
-  const initialSource = new URLSearchParams(location.search).get("src");
+  function loadBuiltInReport(reportId, updateLocation = true) {
+    const report = builtInReports[reportId];
+    if (!report) return;
+    $("#url-input").value = report.source;
+    if (updateLocation && location.protocol !== "file:") {
+      const url = new URL(location.href);
+      url.searchParams.delete("src");
+      url.searchParams.set("report", reportId);
+      history.replaceState(null, "", url);
+    }
+    loadUrl(report.source, reportId, report.label);
+  }
+
+  document.querySelectorAll("[data-report]").forEach(button => {
+    button.addEventListener("click", () => loadBuiltInReport(button.dataset.report));
+  });
+
+  const searchParams = new URLSearchParams(location.search);
+  const initialSource = searchParams.get("src");
   if (initialSource) {
     $("#url-input").value = initialSource;
-    loadUrl();
+    loadUrl(initialSource);
+  } else {
+    const initialReport = searchParams.get("report");
+    loadBuiltInReport(builtInReports[initialReport] ? initialReport : "4", false);
   }
 </script>
 </body>

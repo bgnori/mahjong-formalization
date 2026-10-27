@@ -1,0 +1,60 @@
+name: Deploy computation reports to Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pages.yml"
+      - "reports/report-viewer.html"
+      - "reports/four-tile-direct-report.json"
+      - "reports/seven-tile-report.json"
+      - "reports/ten-tile-report.json"
+      - "reports/thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble static site
+        run: |
+          mkdir _site
+          cp reports/report-viewer.html _site/index.html
+          cp reports/four-tile-direct-report.json _site/
+          cp reports/seven-tile-report.json _site/
+          cp reports/ten-tile-report.json _site/
+          cp reports/thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json _site/
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

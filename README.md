@@ -2,6 +2,8 @@
 
 A Lean 4 formalization and computational study of Mahjong mathematics. The project models tiles, tile patterns, standard-form wait semantics, wait cores, and exhaustive classifications, with machine-checked specifications and executable reports.
 
+[Browse the computation results](https://bgnori.github.io/mahjong-formalization/)
+
 [日本語版はこちら](README.ja.md)
 
 ## Goals
@@ -70,8 +72,9 @@ refinement includes its component relationships (including disjointness) and a
 representative hand and waits, so examples of one code group splitting into
 different relations can be compared. Decomposition-code keys are strings so
 JSON viewers preserve their exact value.
-To browse a report with Unicode Mahjong tiles, open
-[`reports/report-viewer.html`](reports/report-viewer.html) and select or drop a JSON report.
+Browse the generated four-, seven-, ten-, and thirteen-tile reports on the
+[public results site](https://bgnori.github.io/mahjong-formalization/). To view a local JSON report,
+open [`reports/report-viewer.html`](reports/report-viewer.html) and select or drop the report.
 Sections are navigated in a full-width main area, with pagination for long lists.
 For irreducible tenpai hands, the viewer uses decomposition code plus pathology
 profile (healthy, wait suppression only, redundant ambiguity only, or both) as

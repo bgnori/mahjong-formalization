@@ -2,6 +2,8 @@
 
 麻雀の数理を Lean 4 で形式化し、計算によって研究するリポジトリです。牌、牌姿、通常形の待ちの意味論、待ち核、既約分類などを、機械検証された仕様と全列挙レポートとして扱います。
 
+[計算結果をWebで見る](https://bgnori.github.io/mahjong-formalization/)
+
 [English version](README.md)
 
 ## 目的
@@ -65,9 +67,10 @@ lake build sevenTileReport
 各細分類には部品関係（Disjointかどうか）と代表牌姿・待ちが含まれるため、同じ分解コードが
 異なる部品関係へ分かれる実例を比較できる。分解コードキーはJSON Viewerで精度が失われないよう
 文字列として格納する。
-Unicode牌で見やすく表示するには、[`reports/report-viewer.html`](reports/report-viewer.html)を開き、
-JSONレポートを選択またはドロップする。各集計・一覧はナビゲーションから切り替えてメイン領域に
-全幅表示し、長い一覧はページ送りで閲覧できる。
+生成済みレポートは[公開サイト](https://bgnori.github.io/mahjong-formalization/)で4・7・10・13枚形を
+選んで閲覧できる。手元のJSONを表示する場合は
+[`reports/report-viewer.html`](reports/report-viewer.html)を開いてレポートを選択またはドロップする。
+各集計・一覧はナビゲーションから切り替えてメイン領域に全幅表示し、長い一覧はページ送りで閲覧できる。
 
 病的構造は可約／既約とは独立に、全聴牌牌姿に次のマークを付ける。
 判定対象は完成面子（順子または刻子）を**1つ**除去する操作で、待ちは残り枚数ではなく牌種集合で比較する。
