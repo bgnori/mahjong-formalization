@@ -76,6 +76,9 @@ Browse the generated four-, seven-, ten-, and thirteen-tile reports on the
 [public results site](https://bgnori.github.io/mahjong-formalization/). To view a local JSON report,
 open [`reports/report-viewer.html`](reports/report-viewer.html) and select or drop the report.
 Sections are navigated in a full-width main area, with pagination for long lists.
+Each published JSON file and rendered report identifies the commit that last
+updated that result and when it was committed. This is the result's repository
+timestamp, not the time at which the computation ran.
 For irreducible tenpai hands, the viewer uses decomposition code plus pathology
 profile (healthy, wait suppression only, redundant ambiguity only, or both) as
 its primary classification, with an exact representative hand and waits for

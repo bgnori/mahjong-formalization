@@ -100,6 +100,13 @@
       color: var(--muted);
       font-size: .9rem;
     }
+    .result-revision {
+      margin-bottom: 1rem;
+      padding: .8rem 1rem;
+      border-left: .3rem solid var(--accent);
+      background: var(--surface);
+    }
+    .result-revision p { margin: .2rem 0; }
     .panel { padding: 1.1rem; min-width: 0; width: 100%; }
     .metrics {
       display: grid;
@@ -271,6 +278,37 @@
 
   function formatNumber(value) {
     return typeof value === "number" && Number.isFinite(value) ? numberFormat.format(value) : "—";
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("ja-JP", {
+      dateStyle: "long",
+      timeStyle: "short"
+    }).format(date);
+  }
+
+  function resultRevisionPanel(revision) {
+    if (!revision || typeof revision.commit !== "string" ||
+        typeof revision.committedAt !== "string") return null;
+    const section = element("aside", "result-revision");
+    section.setAttribute("aria-label", "この計算結果の版");
+    const commitLink = element("a", "code-list", revision.commit.slice(0, 12));
+    commitLink.href = revision.commitUrl ||
+      `https://github.com/bgnori/mahjong-formalization/commit/${revision.commit}`;
+    const committedAt = element("time", "", formatDateTime(revision.committedAt));
+    committedAt.dateTime = revision.committedAt;
+    committedAt.title = revision.committedAt;
+    const details = element("p");
+    details.append("コミット: ", commitLink, " ／ リポジトリ登録日時: ", committedAt);
+    section.append(
+      element("strong", "", "この計算結果のGit版"),
+      details,
+      element("p", "hint",
+        "表示日時は計算の実行日時ではなく、この結果JSONがGitへ登録された日時です。計算内容の変更はコミットから確認できます。")
+    );
+    return section;
   }
 
   function tileNodes(notation) {
@@ -935,6 +973,8 @@
       element("span", "muted", sourceName || "")
     );
     reportRoot.append(heading);
+    const revisionPanel = resultRevisionPanel(data.resultRevision);
+    if (revisionPanel) reportRoot.append(revisionPanel);
     const overview = panel("集計");
     overview.append(summaryMetrics(data));
     if (data.generation) {

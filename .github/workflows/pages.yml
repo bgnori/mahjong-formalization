@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/pages.yml"
+      - "scripts/build_pages.py"
       - "reports/report-viewer.html"
       - "reports/four-tile-direct-report.json"
       - "reports/seven-tile-report.json"
@@ -26,19 +27,14 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Assemble static site
-        run: |
-          mkdir _site
-          cp reports/report-viewer.html _site/index.html
-          cp reports/four-tile-direct-report.json _site/
-          cp reports/seven-tile-report.json _site/
-          cp reports/ten-tile-report.json _site/
-          cp reports/thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json _site/
-          touch _site/.nojekyll
+        run: python3 scripts/build_pages.py _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
