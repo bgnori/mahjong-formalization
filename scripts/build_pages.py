@@ -18,6 +18,7 @@ REPORT_PATHS = (
         "thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json"
     ),
 )
+CLASSIFIER_FILES = ("index.html", "app.js", "classifier.js", "classification-table.js")
 
 
 def result_revision(path: Path, repository: str) -> dict[str, str]:
@@ -58,6 +59,10 @@ def build(output: Path, repository: str) -> None:
             output / path.name,
             result_revision(path, repository),
         )
+    classifier = output / "classifier"
+    classifier.mkdir(exist_ok=True)
+    for name in CLASSIFIER_FILES:
+        shutil.copy2(ROOT / "web" / name, classifier / name)
     (output / ".nojekyll").touch()
 
 

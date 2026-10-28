@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/pages.yml"
       - "scripts/build_pages.py"
+      - "web/**"
       - "reports/report-viewer.html"
       - "reports/four-tile-direct-report.json"
       - "reports/seven-tile-report.json"
