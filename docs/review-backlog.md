@@ -151,27 +151,12 @@ components.length = fuel ∧
 
 ### 待ち分解コード列の重複を保持する
 
-状態: 要仕様変更
+状態: 対応済み（2026-10-28確認）
 
-現在の `waitDecompositionCodes` は、待ち牌を忘れてコードだけを取り出した後、`deduplicateAndSortBy id` で
-同じコードの重複を除いている。そのため `2345678m` の3つの待ち牌 `2m`、`5m`、`8m` がいずれも
-単騎と順子2つのコード338を持っていても、結果は `[338]` になり、3つの待ち分解があるという多重度を失う。
-
-望ましい基礎表現は、重複を保った正規順のコード多重集合である。この例なら `[338, 338, 338]` を返す。
-多重集合からは明示的に重複を除いて現行のコード集合 `[338]` を導出できるが、集合から元の多重度は復元できない。
-したがって、集合化が必要な集計だけを派生処理として分けるほうが一般性と表現力を保てる。
-
-変更時に確認すること:
-
-- `waitDecompositionCodes` を重複保持へ変更するか、新しい多重集合APIを追加して現行APIを集合版として改名するか。
-- 集合版には `...Set`、重複保持版には `...Multiset` または複数形 `...Codes` など、情報量が分かる名前を付けるか。
-- `2345678m` の期待値を `[338, 338, 338]` とする最小テストを追加する。
-- `MahjongComputations.FourTile` と `SevenTile` の `waitDecompositionCodes` グループキーを、多重集合と集合のどちらにするか。
-- `irreducibleSevenTileWaitDecompositionCodeClasses.length = 26` とレポートのグループ数・代表形がどう変わるか。
-- 集合へ潰す用途では、多重集合からの射影であることと、その射影で失う情報を仕様として明示する。
-
-実施時期は、`WaitDecompositionCode` のドキュメントが一巡した後、レポート層のドキュメントへ進む前がよい。
-レポートの分類単位を説明した後で変更すると、読書順・期待値・生成済みレポートを二度直すことになるためである。
+`waitDecompositionCodes` は、待ち牌付きentryをコードへ写した後も、異なる待ち牌に由来する同一コードの
+出現回数を保持する。同じ待ち牌とコードの組に対する重複はentry生成時に除かれる。
+実装は `WaitDecompositionCode.lean` の `waitDecompositionCodes` と `[26, 26]` の具体例で確認できる。
+この仕様を [reading-order.md](reading-order.md) と [domain-vocabulary.md](domain-vocabulary.md) に反映した。
 
 ### Tanki実装変更後の可約・既約レポート差分を確認する
 
