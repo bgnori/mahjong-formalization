@@ -183,15 +183,21 @@ lake env lean Mahjong/WaitCompletionFinder.lean
 外部利用向けに、Python標準ライブラリだけで動く
 `examples/irreducible_wait_classifier.py`を用意している。4・7・10・13枚の牌姿を重複のない
 Tenhou 136 ID列で受け取り、`waitDecompositionCodes`を計算する。さらに、待ち核集合を保つ完成面子を
-再帰的に除去し、既約分類の固定グローバル整数IDを返す。各IDを`id // 4`で牌種へ正規化するため、
-赤5と通常の5は区別しない。
+再帰的に除去する。既約結果の主分類キーは「待ち分解コード＋病的プロファイル」
+（健全・待ち抑制のみ・冗長曖昧性のみ・両方）で、病的マークもLeanと同じく完成面子を1つ除去して
+判定する。赤5と通常の5は物理牌IDを`id // 4`で牌種へ正規化するため区別しない。
 
 ```python
 from irreducible_wait_classifier import classify_irreducible_wait
 
-classification_id = classify_irreducible_wait([0, 4, 5, 8])  # 1223m -> 5
+classification = classify_irreducible_wait([0, 4, 5, 8])  # 1223m
+classification.key  # (待ち分解コード, 病的プロファイル)
+classification.pathology_profile.value  # "healthy"
+classification.classification_id  # 旧形式のコード単独ID: 5
 ```
 
+旧形式の整数IDだけが必要な場合は、互換用の
+`classify_irreducible_wait_id`を使う。
 実行時は`examples`をモジュール検索パスへ加える。非聴牌や不正入力は
 `WaitClassificationError`の派生例外になる。
 

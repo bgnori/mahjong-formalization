@@ -1,13 +1,16 @@
 """Classify standard-form irreducible waits from Tenhou 136-tile IDs.
 
-The public entry point is ``classify_irreducible_wait``.  Red fives need no
-special case: dividing a Tenhou physical tile ID by four maps every copy,
-including a red five, to the corresponding one of the 34 tile types.
+The primary key combines wait-decomposition codes with a pathology profile.
+Red fives need no special case: dividing a Tenhou physical tile ID by four
+maps every copy, including a red five, to the corresponding one of the 34
+tile types.
 """
 
 from __future__ import annotations
 
 from bisect import bisect_left
+from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 from math import prod
 from typing import Final, Iterable, Sequence
@@ -35,7 +38,7 @@ class UnknownIrreducibleClassificationError(WaitClassificationError):
 
 
 class AmbiguousReductionError(WaitClassificationError):
-    """Wait-core-preserving reductions reached different classification IDs."""
+    """Wait-core-preserving reductions reached different classifications."""
 
 
 _SUPPORTED_HAND_SIZES: Final = frozenset((4, 7, 10, 13))
@@ -56,6 +59,29 @@ _KOUTSU_PRIME: Final = 17
 
 Component = tuple[int, int]
 Codes = tuple[int, ...]
+WaitCore = tuple[int, tuple[tuple[int, tuple[int, ...]], ...]]
+
+
+class PathologyProfile(str, Enum):
+    """The pathology marks found by inspecting single completed-meld removals."""
+
+    HEALTHY = "healthy"
+    SUPPRESSION_ONLY = "suppressionOnly"
+    AMBIGUITY_ONLY = "ambiguityOnly"
+    BOTH = "both"
+
+
+@dataclass(frozen=True)
+class IrreducibleWaitClassification:
+    """Primary classification key for an irreducible tenpai hand."""
+
+    wait_decomposition_codes: Codes
+    pathology_profile: PathologyProfile
+    classification_id: int
+
+    @property
+    def key(self) -> tuple[Codes, PathologyProfile]:
+        return self.wait_decomposition_codes, self.pathology_profile
 
 
 def _tenhou_tiles_to_counts(tile_ids: Sequence[int]) -> tuple[int, ...]:
@@ -226,6 +252,40 @@ def _mentsu_reductions(counts: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
     return tuple(sorted(reductions))
 
 
+def _waits(cores: frozenset[WaitCore]) -> frozenset[int]:
+    return frozenset(wait for wait, _ in cores)
+
+
+@lru_cache(maxsize=None)
+def _pathology_profile(counts: tuple[int, ...]) -> PathologyProfile:
+    _, original_cores = _analyze_counts(counts)
+    original_waits = _waits(original_cores)
+    has_suppression = False
+    has_redundant_ambiguity = False
+
+    for remaining in _mentsu_reductions(counts):
+        codes, remaining_cores = _analyze_counts(remaining)
+        if not codes:
+            continue
+        remaining_waits = _waits(remaining_cores)
+        if original_waits < remaining_waits:
+            has_suppression = True
+        elif (
+            remaining_waits == original_waits
+            and len(remaining_cores) < len(original_cores)
+            and remaining_cores < original_cores
+        ):
+            has_redundant_ambiguity = True
+
+    if has_suppression and has_redundant_ambiguity:
+        return PathologyProfile.BOTH
+    if has_suppression:
+        return PathologyProfile.SUPPRESSION_ONLY
+    if has_redundant_ambiguity:
+        return PathologyProfile.AMBIGUITY_ONLY
+    return PathologyProfile.HEALTHY
+
+
 def _lookup_classification(tile_count: int, codes: Codes) -> int | None:
     table = CLASSIFICATION_CODE_LISTS.get(tile_count)
     if table is None:
@@ -255,14 +315,66 @@ def _irreducible_classification_ids(counts: tuple[int, ...]) -> frozenset[int]:
     return frozenset() if classification_id is None else frozenset((classification_id,))
 
 
-def classify_irreducible_wait(tile_ids: Sequence[int]) -> int:
-    """Reduce a tenpai hand and return its fixed global irreducible-class ID.
+@lru_cache(maxsize=None)
+def _irreducible_classifications(
+    counts: tuple[int, ...],
+) -> frozenset[IrreducibleWaitClassification]:
+    codes, original_cores = _analyze_counts(counts)
+    preserving_reductions = tuple(
+        remaining
+        for remaining in _mentsu_reductions(counts)
+        if _analyze_counts(remaining)[0] and _analyze_counts(remaining)[1] == original_cores
+    )
+    if preserving_reductions:
+        return frozenset(
+            classification
+            for remaining in preserving_reductions
+            for classification in _irreducible_classifications(remaining)
+        )
+
+    classification_id = _lookup_classification(sum(counts), codes)
+    if classification_id is None:
+        return frozenset()
+    return frozenset(
+        (
+            IrreducibleWaitClassification(
+                wait_decomposition_codes=codes,
+                pathology_profile=_pathology_profile(counts),
+                classification_id=classification_id,
+            ),
+        )
+    )
+
+
+def classify_irreducible_wait(tile_ids: Sequence[int]) -> IrreducibleWaitClassification:
+    """Reduce a tenpai hand and return its code-and-pathology classification.
 
     Wait-core-preserving complete melds are removed until an irreducible hand
-    remains.  IDs are shared by all supported hand sizes and the one-tile tanki
-    base class.  An unknown irreducible code list raises
-    :class:`UnknownIrreducibleClassificationError`.
+    remains. The primary key is the sorted wait-decomposition-code list plus
+    the four-valued pathology profile of that irreducible hand. The legacy
+    integer ID is included as ``classification_id``. An unknown irreducible
+    code list raises :class:`UnknownIrreducibleClassificationError`.
     """
+
+    counts = _tenhou_tiles_to_counts(tile_ids)
+    codes, _ = _analyze_counts(counts)
+    if not codes:
+        raise NotTenpaiError("hand is not a standard-form tenpai hand")
+    classifications = _irreducible_classifications(counts)
+    if not classifications:
+        raise UnknownIrreducibleClassificationError(
+            f"no fixed irreducible classification reachable from {(len(tile_ids), codes)}"
+        )
+    if len(classifications) != 1:
+        raise AmbiguousReductionError(
+            "wait-core-preserving reductions reached classifications "
+            f"{sorted(classifications, key=lambda item: (item.wait_decomposition_codes, item.pathology_profile.value))}"
+        )
+    return next(iter(classifications))
+
+
+def classify_irreducible_wait_id(tile_ids: Sequence[int]) -> int:
+    """Return the legacy code-only global ID, without pathology-profile checks."""
 
     counts = _tenhou_tiles_to_counts(tile_ids)
     codes, _ = _analyze_counts(counts)

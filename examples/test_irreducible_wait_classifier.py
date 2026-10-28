@@ -54,19 +54,28 @@ class IrreducibleWaitClassifierTest(unittest.TestCase):
                 self.assertEqual(classifier.wait_decomposition_codes(tile_ids), codes)
                 local_id = bisect_left(table, codes)
                 expected_id = CLASSIFICATION_ID_OFFSETS[tile_count] + local_id
-                self.assertEqual(classifier.classify_irreducible_wait(tile_ids), expected_id)
+                classification = classifier.classify_irreducible_wait(tile_ids)
+                self.assertEqual(classification.wait_decomposition_codes, codes)
+                self.assertEqual(classification.classification_id, expected_id)
+                self.assertIsInstance(classification.pathology_profile, classifier.PathologyProfile)
+                self.assertEqual(classifier.classify_irreducible_wait_id(tile_ids), expected_id)
                 seen_ids.add(expected_id)
         self.assertEqual(seen_ids, set(range(967)))
 
     def test_wait_core_preserving_melds_reduce_recursively(self) -> None:
         hands = ["1223m", "1223m111z", "1223m111222z", "1223m111222333z"]
         self.assertEqual(
-            [classifier.classify_irreducible_wait(tenhou_ids(hand)) for hand in hands],
+            [
+                classifier.classify_irreducible_wait(tenhou_ids(hand)).classification_id
+                for hand in hands
+            ],
             [5, 5, 5, 5],
         )
 
     def test_reducible_four_tile_tanki_uses_base_class(self) -> None:
-        self.assertEqual(classifier.classify_irreducible_wait(tenhou_ids("1114m")), 967)
+        result = classifier.classify_irreducible_wait(tenhou_ids("1114m"))
+        self.assertEqual(result.classification_id, 967)
+        self.assertEqual(result.pathology_profile, classifier.PathologyProfile.HEALTHY)
 
     def test_red_five_identity_is_ignored(self) -> None:
         ordinary_five = [48, 53, 54, 56]
@@ -75,6 +84,25 @@ class IrreducibleWaitClassifierTest(unittest.TestCase):
             classifier.classify_irreducible_wait(ordinary_five),
             classifier.classify_irreducible_wait(red_five),
         )
+
+    def test_pathology_profiles_match_lean_examples(self) -> None:
+        expected_profiles = {
+            "1111222234444m": classifier.PathologyProfile.BOTH,
+            "89p11123456777s": classifier.PathologyProfile.AMBIGUITY_ONLY,
+        }
+        for hand, expected_profile in expected_profiles.items():
+            with self.subTest(hand=hand):
+                result = classifier.classify_irreducible_wait(tenhou_ids(hand))
+                self.assertEqual(result.pathology_profile, expected_profile)
+
+    def test_pathology_profile_refines_identical_decomposition_codes(self) -> None:
+        healthy = classifier.classify_irreducible_wait(tenhou_ids("2333345777p"))
+        ambiguous = classifier.classify_irreducible_wait(tenhou_ids("3335666678s"))
+        self.assertEqual(healthy.wait_decomposition_codes, ambiguous.wait_decomposition_codes)
+        self.assertEqual(healthy.classification_id, ambiguous.classification_id)
+        self.assertEqual(healthy.pathology_profile, classifier.PathologyProfile.HEALTHY)
+        self.assertEqual(ambiguous.pathology_profile, classifier.PathologyProfile.AMBIGUITY_ONLY)
+        self.assertNotEqual(healthy.key, ambiguous.key)
 
     def test_invalid_and_non_tenpai_inputs(self) -> None:
         invalid_hands = ([0, 0, 4, 8], [0, 4, 8, 136], [0])

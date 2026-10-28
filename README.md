@@ -202,14 +202,22 @@ lake env lean Mahjong/WaitCompletionFinder.lean
 `examples/irreducible_wait_classifier.py` is a standard-library-only sample for
 external consumers. It accepts a 4-, 7-, 10-, or 13-tile hand as distinct Tenhou
 136 IDs, computes `waitDecompositionCodes`, removes complete melds while preserving
-the exact wait-core set, and returns a stable global integer classification ID.
+the exact wait-core set, and classifies the irreducible result by its decomposition
+codes plus pathology profile (`healthy`, `suppressionOnly`, `ambiguityOnly`, or
+`both`). Pathology marks use the same one-meld-removal comparisons as Lean.
 Red-five identity is ignored because every physical ID is normalized with `id // 4`.
 
 ```python
 from irreducible_wait_classifier import classify_irreducible_wait
 
-classification_id = classify_irreducible_wait([0, 4, 5, 8])  # 1223m -> 5
+classification = classify_irreducible_wait([0, 4, 5, 8])  # 1223m
+classification.key  # (wait-decomposition codes, pathology profile)
+classification.pathology_profile.value  # "healthy"
+classification.classification_id  # legacy code-only ID: 5
 ```
+
+For callers that still need the old integer-only result,
+`classify_irreducible_wait_id` retains the previous behavior.
 
 Run it with `examples` on the module search path. Non-tenpai and invalid hands raise
 subclasses of `WaitClassificationError`.
