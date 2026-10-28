@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>待ち形分類器</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+    input { font: inherit; font-size: 1.2rem; width: 100%; padding: .5rem; box-sizing: border-box; }
+    button { font: inherit; padding: .3rem .8rem; margin: .2rem .2rem 0 0; cursor: pointer; }
+    .tile { display: inline-block; min-width: 1.8rem; padding: .1rem .2rem; margin: .1rem; text-align: center;
+            border: 1px solid #888; border-radius: .3rem; background: #fffdf5; color: #17202a; }
+    .error { color: #c0392b; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; }
+    dt { font-weight: bold; }
+    dd { margin: 0; }
+    code { word-break: break-all; }
+    .hint { opacity: .7; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>待ち形分類器</h1>
+  <p class="hint">4 / 7 / 10 / 13 枚の牌姿を入力すると、ブラウザ内だけで分類を計算します(サーバには何も送信しません)。</p>
+  <label for="hand">牌姿 (例: <code>1223m</code>, <code>1112345678999m</code>。0 は赤5)</label>
+  <input id="hand" autocomplete="off" spellcheck="false" autofocus>
+  <div id="examples"></div>
+  <section id="result" aria-live="polite"></section>
+
+  <script src="classification-table.js"></script>
+  <script src="classifier.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
