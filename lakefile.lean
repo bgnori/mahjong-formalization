@@ -29,6 +29,9 @@ lean_exe «diag-temp» where
 lean_exe «parallel-computation-test» where
   root := `MahjongTests.ParallelComputation
 
+lean_exe «external-wait-completion-test» where
+  root := `MahjongTests.ExternalWaitCompletion
+
 lean_exe «seven-tile-report-gen» where
   root := `MahjongComputations.SevenTileReport
 
