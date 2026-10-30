@@ -28,6 +28,14 @@ MAX_RETRIES = 3
 MAX_RUNTIME_SECONDS = 7200
 CHECKPOINT_SYNC_SECONDS = 120
 GENERATION_MARKER = "generation.done"
+DEPENDENCY_INPUTS = (
+    "lean-toolchain",
+    "lake-manifest.json",
+    "lakefile.lean",
+    "scripts/remote-compute-requirements.txt",
+    "remote-compute-deps.Dockerfile",
+    "cloudbuild-deps.yaml",
+)
 
 
 @dataclass(frozen=True)
@@ -166,7 +174,16 @@ def is_image_missing(stderr: str) -> bool:
     return "image not found" in lowered or "not_found" in lowered
 
 
-def image_digest(project: str, region: str, image_uri: str) -> str:
+def dependency_hash() -> str:
+    """Identify both dependency pins and the recipe used to build their image."""
+    digest = hashlib.sha256()
+    for name in DEPENDENCY_INPUTS:
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(hashlib.sha256((ROOT / name).read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def existing_image_digest(project: str, image_uri: str) -> str | None:
     describe = subprocess.run(
         [
             "gcloud",
@@ -192,28 +209,71 @@ def image_digest(project: str, region: str, image_uri: str) -> str:
         return digest
     if not is_image_missing(describe.stderr):
         raise RemoteComputeError(
-            "Could not check the compute image in Artifact Registry:\n"
+            f"Could not check {image_uri} in Artifact Registry:\n"
             + describe.stderr.strip()
         )
+    return None
 
-    print(
-        f"No compute image for this commit; building {image_uri} with Cloud Build.",
-        flush=True,
-    )
-    commit = image_uri.rsplit(":", 1)[1]
+
+def build_image(
+    project: str,
+    region: str,
+    image_uri: str,
+    config: str,
+    substitutions: dict[str, str],
+) -> str:
+    print(f"Building {image_uri} with Cloud Build ({config}).", flush=True)
+    values = {"_IMAGE_URI": image_uri, **substitutions}
     run_command(
         [
             "gcloud",
             "builds",
             "submit",
-            "--config=cloudbuild.yaml",
+            f"--config={config}",
             f"--project={project}",
             f"--region={region}",
-            f"--substitutions=_IMAGE_URI={image_uri},_GIT_COMMIT={commit}",
-            ".",
+            "--substitutions=" + ",".join(f"{key}={value}" for key, value in values.items()),
+            str(ROOT),
         ]
     )
-    return image_digest(project, region, image_uri)
+    digest = existing_image_digest(project, image_uri)
+    if digest is None:
+        raise RemoteComputeError(
+            f"Cloud Build succeeded but did not publish {image_uri}."
+        )
+    return digest
+
+
+def image_digest(project: str, region: str, image_uri: str) -> str:
+    digest = existing_image_digest(project, image_uri)
+    if digest is not None:
+        return digest
+
+    dependencies = dependency_hash()
+    base_name = image_uri.rsplit("/", 1)[0] + "/mahjong-compute-deps"
+    base_image = f"{base_name}:{dependencies}"
+    base_digest = existing_image_digest(project, base_image)
+    if base_digest is None:
+        base_digest = build_image(
+            project,
+            region,
+            base_image,
+            str(ROOT / "cloudbuild-deps.yaml"),
+            {"_DEPENDENCY_HASH": dependencies},
+        )
+    base_reference = f"{base_name}@{base_digest}"
+    print(f"Using dependency image {base_reference} (hash {dependencies}).", flush=True)
+    return build_image(
+        project,
+        region,
+        image_uri,
+        str(ROOT / "cloudbuild.yaml"),
+        {
+            "_BASE_IMAGE": base_reference,
+            "_DEPENDENCY_HASH": dependencies,
+            "_GIT_COMMIT": image_uri.rsplit(":", 1)[1],
+        },
+    )
 
 
 def build_job_spec(

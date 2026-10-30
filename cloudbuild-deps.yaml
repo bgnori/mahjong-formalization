@@ -1,0 +1,17 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - remote-compute-deps.Dockerfile
+      - --build-arg
+      - DEPENDENCY_HASH=${_DEPENDENCY_HASH}
+      - -t
+      - ${_IMAGE_URI}
+      - .
+images:
+  - ${_IMAGE_URI}
+timeout: 5400s
+options:
+  machineType: E2_HIGHCPU_8
+  diskSizeGb: 100

@@ -105,10 +105,10 @@ local remote-compute command
 - ジョブ種別と実行引数をentrypointへ明示的に渡せる。
 - 中断時はBatchの再試行に任せる。4枚形・7枚形ジョブに再開用checkpointはない。
 
-`remote-compute.Dockerfile`は4枚形と7枚形のレポート生成器をビルドし、Cloud BuildからArtifact
-Registryへpushする。Batch workerはApplication Default Credentialsを使ってレポート、`/usr/bin/time -v`
-の計測値、実行metadataをCloud Storageへ保存する。再開用checkpointがないため、中断時は
-レポート全体を再実行する。
+`remote-compute-deps.Dockerfile`で依存ベースを事前構築し、`remote-compute.Dockerfile`はその
+digestを`FROM`に使って4枚形・7枚形・10枚形・13枚形のレポート生成器をビルドする。両イメージは
+Cloud BuildからArtifact Registryへpushする。Batch workerはApplication Default Credentialsを
+使ってレポート、`/usr/bin/time -v`の計測値、実行metadataをCloud Storageへ保存する。
 
 ## 初回試行の準備と実行
 
@@ -208,30 +208,44 @@ diff /tmp/seven-local.json /tmp/seven-remote.json
 並列動作は`gs://BUCKET/jobs/JOB_ID/logs/time-v.txt`の`Percent of CPU this job got`で判定する。
 100%を大きく超えていれば、分類フェーズが並列実行されている。
 
-### 将来改善: Lean・Mathlibベースイメージ
+### Lean・Mathlib依存ベースの再利用
 
-現行の`remote-compute.Dockerfile`は、commitごとの計算イメージを作るたびに
-`lake exe cache get`と全レポート生成器の`lake build`を実行する。Mathlibをソースから全量
-コンパイルしているわけではないが、Mathlibキャッシュの取得・展開と依存関係の確認が毎回発生する。
-また、Cloud Buildは前回イメージを`--cache-from`で明示的に読み込んでいないため、commitをまたいだ
-Docker layer cacheの再利用を期待できない。
+`./scripts/remote-compute run ...`の使い方とGCP設定は変更しない。イメージ構築はSpot VM上ではなく、
+Batch投入前のCloud Buildで行う。
 
-これは計算結果の正しさやSpot VMの実行時間には影響しないため、13枚形の現行計算中には変更しない。
-計算イメージのビルド待ちが開発サイクルの主な律速になった時点で、次を検討する。
+1. commit SHAの計算イメージがあれば、そのdigestを再利用する。依存ベースの検索・構築も行わない。
+2. 計算イメージがなければ、次のファイル名と内容からSHA-256の依存hashを計算する。
+   `lean-toolchain`、`lake-manifest.json`、`lakefile.lean`、
+   `scripts/remote-compute-requirements.txt`、`remote-compute-deps.Dockerfile`、
+   `cloudbuild-deps.yaml`。
+3. 同じArtifact Registry repository内の`mahjong-compute-deps:<依存hash>`を検索する。
+   存在しなければ`cloudbuild-deps.yaml`で構築・pushし、存在すれば再利用する。
+4. ベースを`mahjong-compute-deps@sha256:...`として固定し、`cloudbuild.yaml`へ
+   `_BASE_IMAGE`、`_DEPENDENCY_HASH`、`_GIT_COMMIT`、`_IMAGE_URI`を渡して計算イメージを作る。
+   ベースの取得・構築に失敗した場合はエラーで終了し、Batchへ投入しない。
 
-1. `lean-toolchain`と依存関係を識別するhashごとに、Lean、Mathlib cache、Python依存を含む
-   コンテナベースイメージを作る。
-2. commitごとの計算イメージはそのベースイメージを`FROM`に使い、`Mahjong`と
-   `MahjongComputations`だけをコピーしてプロジェクト部分をビルドする。
-3. 代替または補助として、BuildKitのregistry cacheをArtifact Registryへ保存し、
-   `--cache-from`/`--cache-to`で再利用する。
-4. ベースイメージのdigest、Lean toolchain、`lake-manifest.json`の対応を記録し、
-   依存更新時には必ず新しいベースイメージを作る。
+依存ベースはDebian、ビルドツール、Elan・Lean、Python依存、Mathlibのソースと取得・展開済みの
+ビルドキャッシュを含む。`/opt/mahjong`に依存設定と`.lake/packages`を保持し、
+プロジェクトソースは含めない。commitごとのイメージは同じ作業ディレクトリに`Mahjong`、
+`MahjongComputations`、workerスクリプトをコピーし、レポート生成器だけをビルドする。
+通常のLeanソース変更では`apt-get`、`pip install`、`lake exe cache get`を実行しない。
+最終イメージの非root実行とプロジェクトディレクトリの書込禁止は従来どおり維持する。
 
-一般的なVMゴールデンイメージと目的は同じだが、GCP BatchがContainer-Optimized OS上で計算コンテナを
-実行する現在の構成では、VMイメージを管理するより依存関係を焼いたコンテナベースイメージの方が適する。
-導入時には、Cloud Build時間、イメージサイズ、Artifact Registry保存量、依存更新時の再現性を測定して
-現行方式と比較する。
+ベースと計算イメージには`io.github.bgnori.mahjong.dependency-hash`ラベルを付け、
+計算イメージの`org.opencontainers.image.base.name`ラベルにはベースのdigest付き参照を保存する。
+Lean toolchainとmanifestはイメージ内にも残るため、計算イメージから対応を追跡できる。
+ベースのhashタグは上書きしない運用とし、依存更新時は新しいhashのベースを作る。
+`lakefile.lean`全体をhash対象にするため、実行ターゲットのみの変更でもベースは更新される。
+
+初回だけ依存ベースと計算イメージの2回のCloud Buildが走る。OSパッケージ、Elan、Pythonの
+バージョン範囲などの外部更新を取り込む場合は、ベースDockerfileのバージョン指定や構築手順を
+明示的に更新して新しいhashにする。同一hashを削除・再構築した場合まで、外部依存の同一性を
+保証するものではない。使用中のベースはArtifact Registryのクリーンアップ対象から保護する。
+
+この段階ではプロジェクト部分のビルド成果物をcommit間で共有しない。Lakeの差分コンパイルや
+BuildKitのregistry cacheは別途導入する。導入効果は、ソースのみ変更した次のcommitで依存ベース用の
+Cloud Buildが走らないことと、計算イメージのビルド時間で確認する。依存ファイル変更時には新しい
+ベースが作られることも確認する。
 
 ## 資源設定
 
