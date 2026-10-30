@@ -351,9 +351,12 @@ later run skips the buckets it already completed.
 -/
 def classifyBuckets (workers mentsuCount : Nat) (cache : SharedWaitCoreCache)
     (paths : List System.FilePath) : IO BucketSummary := do
-  let partials ← parallelMapChunksIO workers paths fun workerPaths =>
-    workerPaths.foldlM (init := empty) fun summary path => do
-      return merge summary (← classifyBucket cache mentsuCount path)
-  return partials.foldl merge empty
+  let summaries ← parallelMapDynamicIO workers paths fun path => do
+    let started ← IO.monoMsNow
+    let summary ← classifyBucket cache mentsuCount path
+    let finished ← IO.monoMsNow
+    IO.eprintln s!"bucket-classification: completed {path} in {finished - started}ms"
+    pure summary
+  return summaries.foldl merge empty
 
 end MahjongComputations.BucketClassification

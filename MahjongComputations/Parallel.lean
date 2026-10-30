@@ -28,6 +28,41 @@ def parallelMapChunksIO {α β : Type} (workers : Nat) (items : List α)
   tasks.mapM fun task => do
     IO.ofExcept (← IO.wait task)
 
+/-- Run at most `workers` tasks, dynamically taking the next item and preserving input order. -/
+def parallelMapDynamicIO {α β : Type} (workers : Nat) (items : List α)
+    (f : α → IO β) : IO (List β) := do
+  let jobs := (items.zip (List.range items.length)).map fun (item, index) => (index, item)
+  let queue ← Std.Mutex.new jobs
+  let worker : IO (List (Nat × β)) := do
+    let mut results := []
+    let mut running := true
+    while running do
+      let next ← queue.atomically do
+        let pending ← get
+        match pending with
+        | [] => return none
+        | job :: rest =>
+          set rest
+          return some job
+      match next with
+      | none => running := false
+      | some (index, item) =>
+        results := (index, ← f item) :: results
+    return results
+  let workerCount := min (Nat.max 1 workers) items.length
+  let tasks ← (List.range workerCount).mapM fun _ =>
+    IO.asTask worker Task.Priority.dedicated
+  let outcomes ← tasks.mapM fun task => do
+    let outcome ← IO.wait task
+    pure outcome
+  let indexedResults ← outcomes.foldlM (init := []) fun results outcome => do
+    match outcome with
+    | Except.ok workerResults => pure (workerResults ++ results)
+    | Except.error error => throw error
+  let orderedResults := indexedResults.mergeSort fun first second =>
+    decide (first.1 ≤ second.1)
+  return orderedResults.map Prod.snd
+
 /-- Number of processors available to this container, with a safe fallback. -/
 def availableWorkerCount : IO Nat :=
   try

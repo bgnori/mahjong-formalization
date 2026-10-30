@@ -15,6 +15,35 @@ private def otherHand : List Tile := manzu [3]
 private def ensure (condition : Bool) (message : String) : IO Unit :=
   unless condition do throw (IO.userError message)
 
+private def testDynamicParallelMap : IO Unit := do
+  let state ← Std.Mutex.new (false, false)
+  let results ← parallelMapDynamicIO 2 (List.range 8) fun index => do
+    if index == 0 then
+      state.atomically do
+        let (_, observed) ← get
+        set (true, observed)
+      IO.sleep 100
+      state.atomically do
+        let (_, observed) ← get
+        set (false, observed)
+    else if index == 1 then
+      state.atomically do
+        let (firstItemRunning, observed) ← get
+        set (firstItemRunning, observed || firstItemRunning)
+    pure index
+  let (_, itemWasDispatchedWhileFirstRan) ← state.atomically get
+  ensure itemWasDispatchedWhileFirstRan
+    "dynamic scheduler did not dispatch another item while a worker was busy"
+  ensure (results == List.range 8)
+    "dynamic scheduler did not preserve input order"
+  let propagatedError ← try
+    discard <| parallelMapDynamicIO 2 [0, 1, 2] fun index => do
+      if index == 1 then throw (IO.userError "expected worker failure")
+      pure index
+    pure false
+  catch _ => pure true
+  ensure propagatedError "dynamic scheduler swallowed a worker error"
+
 private def testPartitionedCanonicalGeneration : IO Unit := do
   let midpoint := Tile.all.length / 2
   let first := foldCanonicalDirectWaitDerivationsForPairTiles (n := 1)
@@ -132,6 +161,34 @@ private def testThirteenTileGenerationReuse : IO Unit := do
     paths.forM IO.FS.removeFile
     IO.FS.removeDir directory
 
+private def testDynamicBucketClassification : IO Unit := do
+  let singleDirectory : System.FilePath := ".lake/build/dynamic-classification-single"
+  let parallelDirectory : System.FilePath := ".lake/build/dynamic-classification-parallel"
+  let bucketCount := 4
+  let records := foldCanonicalDirectWaitDerivations (n := 1) []
+    fun records derivation =>
+      { tiles := DirectWaitGeneration.hand derivation
+        completion := DirectWaitGeneration.completion derivation } :: records
+  let singlePaths := ExternalWaitCompletion.bucketPaths singleDirectory bucketCount
+  let parallelPaths := ExternalWaitCompletion.bucketPaths parallelDirectory bucketCount
+  try
+    for directory in [singleDirectory, parallelDirectory] do
+      ExternalWaitCompletion.withBucketSet directory 1 bucketCount
+        (action := fun buckets => records.forM buckets.append)
+    let singleCache ← SharedWaitCoreCache.new
+    let parallelCache ← SharedWaitCoreCache.new
+    let singleSummary ← BucketClassification.classifyBuckets 1 1 singleCache singlePaths
+    let parallelSummary ← BucketClassification.classifyBuckets 3 1 parallelCache parallelPaths
+    ensure (singleSummary == parallelSummary)
+      "dynamic bucket classification differs from single-worker classification"
+  finally
+    BucketClassification.clearResults singlePaths
+    BucketClassification.clearResults parallelPaths
+    (singlePaths ++ parallelPaths).forM fun path => do
+      if ← path.pathExists then IO.FS.removeFile path else pure ()
+    IO.FS.removeDir singleDirectory
+    IO.FS.removeDir parallelDirectory
+
 private def testPathologyReports : IO Unit := do
   let (four, _) ← FourTile.directDerivationReportsParallel 2
   ensure (four == FourTile.directDerivationReportsWithCache.1)
@@ -182,11 +239,13 @@ private def testPathologyCheckpoint : IO Unit := do
     BucketClassification.clearResults [path]
 
 def run : IO UInt32 := do
+  testDynamicParallelMap
   testPartitionedCanonicalGeneration
   testExternalRecordCodec
   testExternalBucketFile
   testParallelBucketGeneration
   testThirteenTileGenerationReuse
+  testDynamicBucketClassification
   testPathologyReports
   testPathologyCheckpoint
   let cache ← SharedWaitCoreCache.new
