@@ -28,6 +28,7 @@ MAX_RETRIES = 3
 MAX_RUNTIME_SECONDS = 7200
 CHECKPOINT_SYNC_SECONDS = 120
 GENERATION_MARKER = "generation.done"
+CLASSIFICATION_TIMINGS = "classification-timings.tsv"
 DEPENDENCY_INPUTS = (
     "lean-toolchain",
     "lake-manifest.json",
@@ -640,6 +641,29 @@ def stat_key(path: Path) -> tuple[int, int]:
     return (status.st_size, status.st_mtime_ns)
 
 
+def parse_time_v(text: str) -> dict[str, int | float | str]:
+    """Extract stable resource metrics from GNU time -v output."""
+    labels: dict[str, tuple[str, Any]] = {
+        "Percent of CPU this job got": ("cpu_percent", lambda value: int(value.rstrip("%"))),
+        "Elapsed (wall clock) time (h:mm:ss or m:ss)": ("wall_time", str),
+        "User time (seconds)": ("user_time_seconds", float),
+        "System time (seconds)": ("system_time_seconds", float),
+        "Maximum resident set size (kbytes)": ("maximum_rss_kib", int),
+    }
+    metrics: dict[str, int | float | str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        for label, (name, convert) in labels.items():
+            prefix = f"{label}: "
+            if stripped.startswith(prefix):
+                try:
+                    metrics[name] = convert(stripped[len(prefix) :])
+                except ValueError:
+                    pass
+                break
+    return metrics
+
+
 def checkpoint_files(local_dir: Path) -> list[Path]:
     """Checkpoint members excluding the completion marker and in-progress writes."""
     if not local_dir.is_dir():
@@ -879,10 +903,29 @@ def run_worker(args: argparse.Namespace) -> int:
                     upload_errors.append(f"report upload failed: {error}")
         if time_log.is_file():
             try:
-                print(time_log.read_text(encoding="utf-8"), flush=True)
+                time_log_text = time_log.read_text(encoding="utf-8")
+                print(time_log_text, flush=True)
+                metadata["performance"] = parse_time_v(time_log_text)
                 upload_file(bucket, f"{prefix}/logs/time-v.txt", time_log)
             except (GoogleAPIError, GoogleAuthError, OSError) as error:
                 upload_errors.append(f"time log upload failed: {error}")
+        if bucket_dir is not None:
+            timings = bucket_dir / CLASSIFICATION_TIMINGS
+            if timings.is_file():
+                try:
+                    upload_file(
+                        bucket,
+                        f"{prefix}/logs/{CLASSIFICATION_TIMINGS}",
+                        timings,
+                    )
+                    metadata["classification_timings"] = {
+                        "uri": f"{args.output_uri}/logs/{CLASSIFICATION_TIMINGS}",
+                        "size_bytes": timings.stat().st_size,
+                    }
+                except (GoogleAPIError, GoogleAuthError, OSError) as error:
+                    upload_errors.append(
+                        f"classification timing upload failed: {error}"
+                    )
 
         if upload_errors:
             metadata["status"] = "ARTIFACT_UPLOAD_FAILED"

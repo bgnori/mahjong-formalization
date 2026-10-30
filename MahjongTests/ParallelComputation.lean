@@ -181,6 +181,14 @@ private def testDynamicBucketClassification : IO Unit := do
     let parallelSummary ← BucketClassification.classifyBuckets 3 1 parallelCache parallelPaths
     ensure (singleSummary == parallelSummary)
       "dynamic bucket classification differs from single-worker classification"
+    let timings ← IO.FS.readFile (BucketClassification.timingsPath parallelDirectory)
+    let timingLines := timings.trimAscii.toString.splitOn "\n"
+    ensure (timingLines.head? == some "bucketPath\treused\telapsedMs")
+      "classification timing report has an unexpected header"
+    ensure (timingLines.length == bucketCount + 1)
+      "classification timing report does not contain every bucket"
+    ensure (timingLines.drop 1 |>.all fun line => (line.splitOn "\t").getD 1 "" == "false")
+      "fresh classification timing report marked a bucket as reused"
   finally
     BucketClassification.clearResults singlePaths
     BucketClassification.clearResults parallelPaths

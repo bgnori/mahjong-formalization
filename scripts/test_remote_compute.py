@@ -88,6 +88,27 @@ class RemoteComputeConfigTests(unittest.TestCase):
             )
         )
 
+    def test_time_v_metrics_are_parsed(self) -> None:
+        metrics = remote_compute.parse_time_v(
+            """
+            User time (seconds): 123.50
+            System time (seconds): 4.25
+            Percent of CPU this job got: 656%
+            Elapsed (wall clock) time (h:mm:ss or m:ss): 7:10:22
+            Maximum resident set size (kbytes): 14260633
+            """
+        )
+        self.assertEqual(
+            metrics,
+            {
+                "user_time_seconds": 123.5,
+                "system_time_seconds": 4.25,
+                "cpu_percent": 656,
+                "wall_time": "7:10:22",
+                "maximum_rss_kib": 14260633,
+            },
+        )
+
     def test_cli_reports_invalid_worker_count_without_traceback(self) -> None:
         result = subprocess.run(
             [

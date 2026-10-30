@@ -313,6 +313,10 @@ private def parseSummary (mentsuCount : Nat) (text : String) : Option BucketSumm
 def resultPath (bucketPath : System.FilePath) : System.FilePath :=
   ⟨bucketPath.toString ++ ".result"⟩
 
+/-- Summary of per-bucket classification timings for a completed bucket set. -/
+def timingsPath (directory : System.FilePath) : System.FilePath :=
+  directory / "classification-timings.tsv"
+
 /-- Read a saved classification result, ignoring one that does not match this layout. -/
 def readResult (bucketPath : System.FilePath) (mentsuCount : Nat) :
     IO (Option BucketSummary) := do
@@ -329,21 +333,26 @@ def writeResult (bucketPath : System.FilePath) (mentsuCount : Nat)
   IO.FS.rename partPath path
 
 /-- Remove every saved classification result for a bucket set. -/
-def clearResults (paths : List System.FilePath) : IO Unit :=
+def clearResults (paths : List System.FilePath) : IO Unit := do
   paths.forM fun bucketPath => do
     for path in [resultPath bucketPath, ⟨(resultPath bucketPath).toString ++ ".part"⟩] do
       if ← path.pathExists then
         IO.FS.removeFile path
+  if let some bucketPath := paths.head? then
+    if let some directory := bucketPath.parent then
+      for path in [timingsPath directory, ⟨(timingsPath directory).toString ++ ".part"⟩] do
+        if ← path.pathExists then
+          IO.FS.removeFile path
 
 private def classifyBucket (cache : SharedWaitCoreCache) (mentsuCount : Nat)
-    (path : System.FilePath) : IO BucketSummary := do
+    (path : System.FilePath) : IO (BucketSummary × Bool) := do
   if let some saved ← readResult path mentsuCount then
     IO.eprintln s!"bucket-classification: reusing {resultPath path}"
-    return saved
+    return (saved, true)
   let groups ← ExternalWaitCompletion.readGroups path mentsuCount
   let summary ← groups.foldlM (addShapeReport cache) empty
   writeResult path mentsuCount summary
-  return summary
+  return (summary, false)
 
 /--
 Classify every bucket with `workers` tasks, saving each bucket's totals so that a
@@ -351,12 +360,22 @@ later run skips the buckets it already completed.
 -/
 def classifyBuckets (workers mentsuCount : Nat) (cache : SharedWaitCoreCache)
     (paths : List System.FilePath) : IO BucketSummary := do
-  let summaries ← parallelMapDynamicIO workers paths fun path => do
+  let measurements ← parallelMapDynamicIO workers paths fun path => do
     let started ← IO.monoMsNow
-    let summary ← classifyBucket cache mentsuCount path
+    let (summary, reused) ← classifyBucket cache mentsuCount path
     let finished ← IO.monoMsNow
-    IO.eprintln s!"bucket-classification: completed {path} in {finished - started}ms"
-    pure summary
-  return summaries.foldl merge empty
+    let elapsedMs := finished - started
+    IO.eprintln s!"bucket-classification: completed {path} in {elapsedMs}ms"
+    pure (path, summary, reused, elapsedMs)
+  if let some bucketPath := paths.head? then
+    if let some directory := bucketPath.parent then
+      let lines := measurements.map fun (path, _, reused, elapsedMs) =>
+        s!"{path}\t{if reused then "true" else "false"}\t{elapsedMs}"
+      let path := timingsPath directory
+      let partPath : System.FilePath := ⟨path.toString ++ ".part"⟩
+      IO.FS.writeFile partPath
+        ("bucketPath\treused\telapsedMs\n" ++ String.intercalate "\n" lines ++ "\n")
+      IO.FS.rename partPath path
+  return measurements.foldl (fun summary (_, addition, _, _) => merge summary addition) empty
 
 end MahjongComputations.BucketClassification

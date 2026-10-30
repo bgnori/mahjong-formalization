@@ -467,6 +467,10 @@ checkpoint機構を追加した後の再実行（2026-10-09、`8b1db16`）:
   成功時に`gs://BUCKET/checkpoints/thirteen-tile/COMMIT/`が削除されることを確認した。
 - Spot中断は発生しなかったため、実環境での再開動作はまだ未検証である。
 
+次回の13枚形全件実行では、`logs/classification-timings.tsv`にbucket別時間、
+`logs/time-v.txt`にCPU使用率とwall timeを保存する。主要な`time -v`指標は
+`metadata.json`の`performance`にも記録し、動的bucket割当の効果を評価する。
+
 ### Phase 3: 必要な場合だけ細粒度化
 
 - bucket別結果の永続化は実装済みなので、単一ジョブの再開で足りるかを実測で判断する。
