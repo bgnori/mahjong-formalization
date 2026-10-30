@@ -1,7 +1,9 @@
 *
 !cloudbuild.yaml
+!cloudbuild-deps.yaml
 !.dockerignore
 !remote-compute.Dockerfile
+!remote-compute-deps.Dockerfile
 !lean-toolchain
 !lakefile.lean
 !lake-manifest.json

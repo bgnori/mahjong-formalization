@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import remote_compute
 
@@ -103,6 +104,221 @@ class RemoteComputeConfigTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Error: --workers must be a positive integer.", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+
+class ComputeImageTests(unittest.TestCase):
+    project = "example-project"
+    region = "us-central1"
+    image = (
+        "us-central1-docker.pkg.dev/example-project/mahjong-compute/"
+        "mahjong-compute:" + "a" * 40
+    )
+    base_name = image.rsplit("/", 1)[0] + "/mahjong-compute-deps"
+    base_digest = "sha256:" + "b" * 64
+    compute_digest = "sha256:" + "c" * 64
+
+    def test_dependency_hash_tracks_every_dependency_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in remote_compute.DEPENDENCY_INPUTS:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((remote_compute.ROOT / name).read_bytes())
+            with patch.object(remote_compute, "ROOT", root):
+                initial = remote_compute.dependency_hash()
+                self.assertRegex(initial, r"^[0-9a-f]{64}$")
+                self.assertEqual(initial, remote_compute.dependency_hash())
+                for name in remote_compute.DEPENDENCY_INPUTS:
+                    with self.subTest(name=name):
+                        path = root / name
+                        original = path.read_bytes()
+                        path.write_bytes(original + b"\n")
+                        self.assertNotEqual(initial, remote_compute.dependency_hash())
+                        path.write_bytes(original)
+                (root / "Mahjong").mkdir()
+                (root / "Mahjong" / "Basic.lean").write_text("-- changed source\n")
+                (root / "remote-compute.Dockerfile").write_text("# changed project recipe\n")
+                self.assertEqual(initial, remote_compute.dependency_hash())
+
+    def test_existing_commit_needs_no_base_lookup_or_build(self) -> None:
+        with (
+            patch.object(
+                remote_compute, "existing_image_digest", return_value=self.compute_digest
+            ) as lookup,
+            patch.object(remote_compute, "dependency_hash") as dependencies,
+            patch.object(remote_compute, "run_command") as run,
+        ):
+            self.assertEqual(
+                remote_compute.image_digest(self.project, self.region, self.image),
+                self.compute_digest,
+            )
+        lookup.assert_called_once_with(self.project, self.image)
+        dependencies.assert_not_called()
+        run.assert_not_called()
+
+    def test_new_commit_reuses_base_by_digest(self) -> None:
+        with (
+            patch.object(
+                remote_compute,
+                "existing_image_digest",
+                side_effect=[None, self.base_digest, self.compute_digest],
+            ) as lookup,
+            patch.object(remote_compute, "run_command") as run,
+        ):
+            dependencies = remote_compute.dependency_hash()
+            result = remote_compute.image_digest(self.project, self.region, self.image)
+        self.assertEqual(result, self.compute_digest)
+        self.assertEqual(
+            lookup.call_args_list[1].args,
+            (self.project, f"{self.base_name}:{dependencies}"),
+        )
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertIn(f"--config={remote_compute.ROOT / 'cloudbuild.yaml'}", command)
+        self.assertIn(
+            f"--substitutions=_IMAGE_URI={self.image},"
+            f"_BASE_IMAGE={self.base_name}@{self.base_digest},"
+            f"_DEPENDENCY_HASH={dependencies},_GIT_COMMIT={'a' * 40}",
+            command,
+        )
+        self.assertEqual(command[-1], str(remote_compute.ROOT))
+
+    def test_missing_base_is_built_before_compute_image(self) -> None:
+        with (
+            patch.object(
+                remote_compute,
+                "existing_image_digest",
+                side_effect=[None, None, self.base_digest, self.compute_digest],
+            ),
+            patch.object(remote_compute, "run_command") as run,
+        ):
+            dependencies = remote_compute.dependency_hash()
+            result = remote_compute.image_digest(self.project, self.region, self.image)
+        self.assertEqual(result, self.compute_digest)
+        self.assertEqual(run.call_count, 2)
+        base_command = run.call_args_list[0].args[0]
+        self.assertIn(
+            f"--config={remote_compute.ROOT / 'cloudbuild-deps.yaml'}", base_command
+        )
+        self.assertIn(
+            f"--substitutions=_IMAGE_URI={self.base_name}:{dependencies},"
+            f"_DEPENDENCY_HASH={dependencies}",
+            base_command,
+        )
+        self.assertIn(f"--project={self.project}", base_command)
+        self.assertIn(f"--region={self.region}", base_command)
+        self.assertIn(
+            f"_BASE_IMAGE={self.base_name}@{self.base_digest}",
+            run.call_args_list[1].args[0][-2],
+        )
+
+    def test_unpublished_images_fail_without_rebuilding_forever(self) -> None:
+        for responses in ([None, None, None], [None, self.base_digest, None]):
+            with (
+                self.subTest(responses=responses),
+                patch.object(
+                    remote_compute, "existing_image_digest", side_effect=responses
+                ),
+                patch.object(remote_compute, "run_command") as run,
+            ):
+                with self.assertRaisesRegex(
+                    remote_compute.RemoteComputeError, "did not publish"
+                ):
+                    remote_compute.image_digest(self.project, self.region, self.image)
+                run.assert_called_once()
+
+    def test_failed_base_build_does_not_build_compute_image(self) -> None:
+        with (
+            patch.object(
+                remote_compute, "existing_image_digest", side_effect=[None, None]
+            ),
+            patch.object(
+                remote_compute,
+                "run_command",
+                side_effect=remote_compute.RemoteComputeError("build failed"),
+            ) as run,
+        ):
+            with self.assertRaisesRegex(remote_compute.RemoteComputeError, "build failed"):
+                remote_compute.image_digest(self.project, self.region, self.image)
+        run.assert_called_once()
+
+    def test_registry_errors_are_not_treated_as_missing_images(self) -> None:
+        with (
+            patch.object(
+                remote_compute.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    [], 1, stdout="", stderr="PERMISSION_DENIED"
+                ),
+            ),
+            patch.object(remote_compute, "run_command") as run,
+        ):
+            with self.assertRaisesRegex(
+                remote_compute.RemoteComputeError, "PERMISSION_DENIED"
+            ):
+                remote_compute.image_digest(self.project, self.region, self.image)
+        run.assert_not_called()
+
+    def test_registry_response_requires_a_digest(self) -> None:
+        for payload in ('{}', '{"image_summary":{"digest":"sha256:abc"}}'):
+            with (
+                self.subTest(payload=payload),
+                patch.object(
+                    remote_compute.subprocess,
+                    "run",
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, stdout=payload, stderr=""
+                    ),
+                ),
+            ):
+                if payload == '{}':
+                    with self.assertRaisesRegex(
+                        remote_compute.RemoteComputeError, "did not return an image digest"
+                    ):
+                        remote_compute.existing_image_digest(self.project, self.image)
+                else:
+                    self.assertEqual(
+                        remote_compute.existing_image_digest(self.project, self.image),
+                        "sha256:abc",
+                    )
+
+    def test_missing_registry_image_returns_none(self) -> None:
+        with patch.object(
+            remote_compute.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                [], 1, stdout="", stderr="Image not found."
+            ),
+        ):
+            self.assertIsNone(
+                remote_compute.existing_image_digest(self.project, self.image)
+            )
+
+    def test_build_files_keep_dependency_work_out_of_commit_builds(self) -> None:
+        root = remote_compute.ROOT
+        base = (root / "remote-compute-deps.Dockerfile").read_text()
+        compute = (root / "remote-compute.Dockerfile").read_text()
+        self.assertIn("lake exe cache get", base)
+        self.assertIn("pip install", base)
+        self.assertNotIn("COPY Mahjong", base)
+        self.assertNotIn("lake build", base)
+        self.assertIn("FROM ${BASE_IMAGE}", compute)
+        self.assertIn("lake build", compute)
+        self.assertNotIn("lake exe cache get", compute)
+        self.assertNotIn("pip install", compute)
+        self.assertNotIn("apt-get", compute)
+        self.assertIn("USER worker", compute)
+        self.assertIn("chmod -R a-w /opt/mahjong", base)
+        self.assertIn("find /opt/mahjong -perm /222 -exec chmod a-w {} +", compute)
+        self.assertNotIn("chmod -R", compute)
+        for job in remote_compute.JOB_TYPES.values():
+            self.assertIn(f"test -x .lake/build/bin/{job.executable}", compute)
+        ignore = (root / ".gcloudignore").read_text().splitlines()
+        for name in remote_compute.DEPENDENCY_INPUTS:
+            self.assertIn(f"!{name}", ignore)
+        build = (root / "cloudbuild.yaml").read_text()
+        self.assertIn("BASE_IMAGE=${_BASE_IMAGE}", build)
+        self.assertIn("DEPENDENCY_HASH=${_DEPENDENCY_HASH}", build)
 
 
 class SevenTileJobTests(unittest.TestCase):

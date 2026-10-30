@@ -1,46 +1,26 @@
-FROM debian:bookworm-slim
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
 
+ARG BASE_IMAGE
+ARG DEPENDENCY_HASH
 ARG GIT_COMMIT=unknown
 
-ENV ELAN_HOME=/opt/elan \
-    PATH=/opt/elan/bin:/opt/venv/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates \
-      curl \
-      git \
-      build-essential \
-      python3 \
-      python3-venv \
-      time \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p "$ELAN_HOME" \
-    && curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
-      | sh -s -- -y --no-modify-path --default-toolchain none
-
-WORKDIR /opt/mahjong
-
-COPY lean-toolchain lakefile.lean lake-manifest.json ./
 COPY Mahjong ./Mahjong
 COPY MahjongComputations ./MahjongComputations
 COPY scripts/remote_compute.py ./scripts/remote_compute.py
-COPY scripts/remote-compute-requirements.txt ./scripts/remote-compute-requirements.txt
 
-RUN python3 -m venv /opt/venv \
-    && pip install --no-cache-dir -r scripts/remote-compute-requirements.txt \
-    && lake exe cache get \
-    && lake build four-tile-report-gen seven-tile-report-gen ten-tile-report-gen \
+# Only chmod writable files to avoid copying read-only dependency files into this layer.
+RUN lake build four-tile-report-gen seven-tile-report-gen ten-tile-report-gen \
         thirteen-tile-report-gen \
     && test -x .lake/build/bin/four-tile-report-gen \
     && test -x .lake/build/bin/seven-tile-report-gen \
     && test -x .lake/build/bin/ten-tile-report-gen \
     && test -x .lake/build/bin/thirteen-tile-report-gen \
-    && chmod -R a-w /opt/mahjong \
-    && useradd --uid 65532 --create-home --home-dir /home/worker worker
+    && find /opt/mahjong -perm /222 -exec chmod a-w {} +
 
-LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}" \
+      org.opencontainers.image.base.name="${BASE_IMAGE}" \
+      io.github.bgnori.mahjong.dependency-hash="${DEPENDENCY_HASH}"
 
 ENV HOME=/home/worker
 

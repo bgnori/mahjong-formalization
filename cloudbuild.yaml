@@ -5,14 +5,17 @@ steps:
       - -f
       - remote-compute.Dockerfile
       - --build-arg
+      - BASE_IMAGE=${_BASE_IMAGE}
+      - --build-arg
+      - DEPENDENCY_HASH=${_DEPENDENCY_HASH}
+      - --build-arg
       - GIT_COMMIT=${_GIT_COMMIT}
       - -t
       - ${_IMAGE_URI}
       - .
 images:
   - ${_IMAGE_URI}
-# Fetching the Mathlib cache and building the Lean executable exceeds the
-# ten-minute default build timeout.
+# Building the project executables can exceed the ten-minute default timeout.
 timeout: 5400s
 options:
   machineType: E2_HIGHCPU_8
