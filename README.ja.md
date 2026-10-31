@@ -224,6 +224,10 @@ PYTHONPATH=examples python3 -m unittest discover -s examples -p 'test_*.py'
 - [docs/remote-compute-gcp-batch.md](docs/remote-compute-gcp-batch.md): GCP Batch + Spot VMによるリモート計算の現行方針。
 - [docs/remote-compute-platform-rationale-2026-10-09.md](docs/remote-compute-platform-rationale-2026-10-09.md):
   リモート計算基盤としてGCP Batch + Spot VMの試行を選んだ経緯と見直し条件。
+- [docs/thirteen-tile-dynamic-bucket-scheduling.md](docs/thirteen-tile-dynamic-bucket-scheduling.md):
+  13枚形分類の動的bucket割当と全件実行での観測。
+- [docs/thirteen-tile-runtime-overrun-analysis-2026-10-31.md](docs/thirteen-tile-runtime-overrun-analysis-2026-10-31.md):
+  13枚形全件計算の中断、再試行、性能、最終結果の事後分析。
 
 麻雀モジュール単位の概要は [Mahjong/README.md](Mahjong/README.md) を参照してください。
 

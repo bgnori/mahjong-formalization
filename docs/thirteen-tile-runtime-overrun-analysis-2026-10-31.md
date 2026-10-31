@@ -1,28 +1,35 @@
-# 13枚形計算の14時間超過と再試行の分析
+# 13枚形計算の14時間超過・再試行・完了分析
 
-調査日: 2026-10-31。以下の進捗は同日10:42 JSTまでの観測であり、完了報告ではない。
-実行中ジョブの停止、再投入、設定変更は行っていない。
+調査日: 2026-10-31。
+本稿は、同日18:39 JSTに完了した13枚形計算について、14時間上限による中断、
+Spot VM回収、checkpointからの再開、最終結果をまとめた記録である。
+調査中にジョブの停止、再投入、設定変更は行っていない。
 
 ## 要約
 
-- 中断の直接原因は、Batch taskの`maxRunDuration=50400s`（14時間）への到達。
+- ジョブは3回目の試行（attempt 2）で成功し、最終レポートを保存した。
+  ジョブ開始から完了までのBatch上の実行時間は27時間54分49秒だった。
+- attempt 0の中断原因は、Batch taskの`maxRunDuration=50400s`（14時間）への到達。
   Spot回収、VM再起動、OOMを示す終了理由ではない。
-- 導出生成は約155秒で終了しており、時間超過は分類段階で発生した。
+- attempt 1はcheckpointから再開したが、約7時間48分後にSpot VMが回収された。
+  attempt 2は分類済み238 bucketを再利用し、残る18 bucketを処理して成功した。
+- 導出生成は初回の約155秒で終了しており、時間超過は分類段階で発生した。
 - 旧実行から全牌姿への病的構造判定が追加されている。処理内容が異なるため、
-  旧実行の約6時間40分、または以前の約7時間10分を現在の所要時間とはみなせない。
+  旧実行の約6時間40分、または以前の約7時間10分を現在の全件所要時間とはみなせない。
   追加判定は増大要因の有力候補だが、寄与率は未計測。
-- 分類は32 vCPU中16 workerで動作する。初回試行の分類中の長期平均CPU使用率は
+- 分類は32 vCPU中16 workerで動作した。attempt 0の分類中の長期平均CPU使用率は
   VM全体で約19.0%（約6.08 core相当）。開始直後の約35%は持続しなかった。
+  attempt 2のGNU `time -v`は678%（約6.78 core）だった。
 - 256 bucket中、実データを持つのは64個。非空bucketのファイルサイズ差は約0.032%しかなく、
   今回は「一部のbucketだけ入力件数が突出した」とは説明できない。
   一方、1 bucketに約5.6～6.4時間を要し、分割・途中保存の単位が粗い。
-- 初回は非空bucketの32/64個まで完了して中断した。完了済み174 bucketは全件再利用したが、
-  途中だった16 bucketの処理はやり直した。これは初回超過の原因ではなく、その後の総時間を増やす要因。
+- 完了済みbucketのcheckpointは各再試行で再利用されたが、処理中だったbucketは保存されず、
+  attempt 0とattempt 1の終了時にそれぞれ16 bucket分の途中処理を失った。
 
-14時間は現在の設定上限であり、現在の分類内容の実測で裏付けられた完了予測ではない。
+14時間は試行ごとの設定上限であり、現在の分類内容の実測で裏付けられた完了予測ではなかった。
 設定値を増やすだけでは、分類自体の計算量やCPU利用効率は改善しない。
 
-## 対象と証拠
+## 対象と最終状態
 
 | 項目 | 値 |
 | --- | --- |
@@ -33,25 +40,34 @@
 | 並列数 | 生成32、分類16 |
 | bucket数 | 256 |
 | 制限 | 1試行14時間、最大再試行3回 |
+| 最終状態 | `SUCCEEDED` |
+| 完了時刻 | 2026-10-31 18:39:18 JST |
+| Batch `runDuration` | 100,488.873秒（27時間54分49秒） |
 
 Batch taskの`statusEvents`、Cloud Loggingの`batch_task_logs`、
-Compute EngineのCPU utilization、Cloud Storageのcheckpoint一覧を照合した。
-時刻は以下すべてJST。CPUは5分平均値を使用した。
+Compute EngineのCPU utilization、Cloud Storageのcheckpointと成果物を照合した。
+時刻は以下すべてJST。MonitoringのCPU値は5分平均値を使用した。
 
 | 時刻 | 観測 |
 | --- | --- |
-| 10/30 14:44:30 | 初回task開始 |
+| 10/30 14:44:30 | attempt 0開始 |
 | 14:44:50 | 生成開始。復元checkpointは0個 |
 | 14:47:25 | 93,251,547件の導出生成完了、分類開始 |
 | 20:23:59～20:26:52 | 最初の非空16 bucketが完了 |
 | 10/31 02:32:30～02:48:12 | 次の非空16 bucketが完了 |
 | 04:44:40 | 実行上限超過、終了コード`50005`。attempt 0失敗 |
-| 04:45:10 | 同じVM上で再試行開始 |
-| 04:46:01 | 431ファイル復元。導出93,251,547件と分類済み174 bucketを再利用 |
-| 10:31:21まで | 再試行の完了ログは再利用分込み238 bucket |
+| 04:45:10 | 同じVM上でattempt 1開始 |
+| 04:46:01 | 431ファイル復元。導出と分類済み174 bucketを再利用 |
+| 10:31ごろ | 分類済みbucketが238個に到達 |
+| 12:33:17 | Spot VM回収、終了コード`50001`。attempt 1失敗 |
+| 12:34:56 | 別VM上でattempt 2開始 |
+| 12:35:28 | 495ファイル復元。導出と分類済み238 bucketを再利用 |
+| 18:38:41 | 最後の非空bucketの分類完了 |
+| 18:38:48 | 最終レポート出力 |
+| 18:39:18 | 成果物保存完了、taskとjobが`SUCCEEDED`へ遷移 |
 
-画像の04:45ごろのCPU再上昇は、この自動再試行と一致する。
-VM IDは`770973858454409424`で、初回と再試行で変わっていない。
+attempt 0とattempt 1のVM IDは`770973858454409424`、
+attempt 2は`2498309881275670403`だった。
 
 ## 1. 旧実績と現在は分類する内容が異なる
 
@@ -91,15 +107,21 @@ Compute Engineの`compute.googleapis.com/instance/cpu/utilization`について�
 
 | 期間（JST、5分平均点の終端で選択） | 点数 | VM全体CPU | core換算 |
 | --- | ---: | ---: | ---: |
-| 初回 10/30 14:50～10/31 04:40 | 166 | 19.01% | 6.08 |
-| 初回の開始付近 14:50～15:20 | 6 | 33.98% | 10.87 |
-| 初回の末尾付近 10/31 02:40～04:40 | 24 | 16.94% | 5.42 |
-| 再試行 10/31 08:40～10:40 | 24 | 18.12% | 5.80 |
+| attempt 0、10/30 14:50～10/31 04:40 | 166 | 19.01% | 6.08 |
+| attempt 0開始付近、14:50～15:20 | 6 | 33.98% | 10.87 |
+| attempt 0末尾付近、10/31 02:40～04:40 | 24 | 16.94% | 5.42 |
+| attempt 1、10/31 08:40～10:40 | 24 | 18.12% | 5.80 |
 
 分類16 workerなので、1 workerが1 coreを占有すると仮定した上限はVM全体の50%。
-実測19.01%はその約38%に相当する。32 vCPUを割り当てても、32 coreを使った計算にはなっていない。
+attempt 0の実測19.01%はその約38%に相当する。32 vCPUを割り当てても、
+32 coreを使った計算にはなっていない。
 旧実行の668%と比べても、長期に並列利用が改善したとは言えない。
 ただし、VM指標には他プロセスも含まれ、GNU `time`との厳密な直接比較ではない。
+
+attempt 2のGNU `time -v`は、wall time 6:02:29、CPU使用率678%、
+最大RSS 13,374,172 KiB（約12.75 GiB）、swap 0だった。
+これは238 bucketを再利用して残り18 bucketだけを処理した試行の値であり、
+中断前の処理を含む全件分類のwall timeや最大RSSではない。
 
 低CPUだけで原因をlock競合、I/O、GC、single-flight待ちのいずれかに特定することはできない。
 [共有cache](../MahjongComputations/Parallel.lean)にはstripe mutexと、
@@ -117,64 +139,91 @@ Cloud Storage上の256個の生成済みファイルを確認すると、192個�
 非空64個は最小27,680,025、最大27,688,974 bytesで、差は最小に対して約0.032%だった。
 ファイルサイズはほぼ均等だが、牌姿数、除去候補数、cache miss数まで均等と保証するものではない。
 
-初回試行の非空bucketの経過時間は次のとおり。
+各試行で新規に処理した非空bucketの経過時間は次のとおり。
 時間にはbucket読込・group化・分類・結果保存を含み、CPU timeではない。
 
-| 非空bucket群 | 個数 | 最小 | 中央値 | 最大 |
+| 非空bucket群 | 個数 | 最小 | 中央値または平均 | 最大 |
 | --- | ---: | ---: | ---: | ---: |
-| 最初の16個（番号1～61） | 16 | 5.609 h | 5.633 h | 5.657 h |
-| 次の16個（番号65～125） | 16 | 6.139 h | 6.165 h | 6.382 h |
+| attempt 0、番号1～61 | 16 | 5.609 h | 中央値5.633 h | 5.657 h |
+| attempt 0、番号65～125 | 16 | 6.139 h | 中央値6.165 h | 6.382 h |
+| attempt 2、最後の16個 | 16 | 6.013 h | 平均6.026 h | 6.039 h |
 
 最初の16個が終わるまで、動的キューでも次の非空bucketには進めない。
 32個が完了した時点ですでに分類開始から約12時間経過しており、
 14時間上限の中で残り半分を終える余裕はなかった。
-仮に後続も同程度なら、64個を16 workerで処理する4波には約22～26時間を要する。
-これは粒度の問題を示す概算であり、cacheの温まりや再試行を無視した完了時刻予測ではない。
+実測でも、64個を16 workerで処理する4波は各波おおむね5.6～6.4時間を要した。
 
 単にbucket数を増やしても、生キーの剰余方式のままでは空bucketの問題は残る。
-また、細分化は単一bucketの待ちや再計算損失を減らし得るが、総分類処理量自体は減らさない。
+細分化は単一bucketの待ちや再計算損失を減らし得るが、総分類処理量自体は減らさない。
 
-## 4. 再試行による追加損失
+## 4. 再試行とcheckpoint
 
-中断前の完了174個は「非空32個 + 空142個」。
-復元431ファイルは「生成256個 + generation marker 1個 + 分類結果174個」と一致し、
-再試行ログでも174個すべての分類結果の再利用を確認した。
-checkpoint同期漏れで完了済みbucketを失った証拠はない。
+attempt 0終了前の完了174個は「非空32個 + 空142個」。
+attempt 1で復元した431ファイルは「生成256個 + generation marker 1個 + 分類結果174個」と一致し、
+174個すべての分類結果が再利用された。checkpoint同期漏れで完了済みbucketを失った証拠はない。
 
 一方、[classifyBucket](../MahjongComputations/BucketClassification.lean)は
-bucket全体の処理後にだけ結果を保存する。queue順と完了時刻から、
-中断時は次の16個（番号129～189）が処理中だったと推定できる。
-それぞれ約1.94～2.20時間、合計約33.76 worker-hours分の途中処理を失った計算になる。
-これは待ち時間を含むworker経過時間であり、CPU-hoursや課金時間の合計ではない。
-さらに[再開時には共有cacheを新規作成](../MahjongComputations/ThirteenTile.lean)するため、
-cache再構築の追加コストもあり得るが未計測。
+bucket全体の処理後にだけ結果を保存する。attempt 0の終了時には次の非空16 bucketが処理中で、
+それぞれ約1.94～2.20時間、合計約33.76 worker-hours分の途中処理を失ったと推定できる。
 
-10:42時点の完了238個は「非空48個 + 空190個」。
-非空だけでは48/64個、75%であり、「238/256なので93%終了」と所要時間へ換算してはいけない。
-残りは非空16個と空2個。再試行にも14時間上限があるため、
-未完了なら同日18:45ごろに再び中断され得る。
+attempt 1では分類済みbucketが238個まで増えた後、残る非空16 bucketを処理中にSpot VMが回収された。
+attempt 2で復元した495ファイルは
+「生成256個 + generation marker 1個 + 分類結果238個」と一致する。
+`classification-timings.tsv`でも238 bucketが`reused=true`、
+残る18 bucketが`reused=false`だった。新規処理18個の内訳は非空16個と空2個である。
 
-## 完了後の検証と次回の改善順序
+再試行時には[共有cacheを新規作成](../MahjongComputations/ThirteenTile.lean)する。
+そのため、処理中bucketのやり直しに加えてcache再構築のコストも生じるが、寄与率は未計測である。
 
-1. **今回の完了を待つ。** 最終レポート、`metadata.json`、`logs/time-v.txt`、
-   `logs/classification-timings.tsv`を取得する。
-   最終試行のtimingでは`reused=true`は読込時間であり、過去の分類時間ではない。
-   初回ログと再試行ログも併せて保存し、ジョブ全体の経過時間と最終試行の時間を分ける。
-   強制終了した初回の`time -v`やmetadataは保存されておらず、最終試行の値で代用しない。
-2. **分類内訳を測る。** bucket読込・group化、reducibility、病的構造判定、集計の各時間と、
+## 5. 最終成果物と結果
+
+次の成果物がジョブ出力先へ保存された。
+
+| 成果物 | 内容 |
+| --- | --- |
+| `results/thirteen-tile-report.json` | 最終レポート、5,770,676 bytes |
+| `metadata.json` | 実行条件、試行番号、性能値、成果物hash |
+| `logs/time-v.txt` | attempt 2のGNU `time -v`出力 |
+| `logs/classification-timings.tsv` | attempt 2のbucket別再利用有無と経過時間 |
+
+最終レポートのSHA-256は
+`9f2a9f94f1c79284a9f10000b686db492cabf1f3e08af02fdf62afddf1bc435c`。
+主要な集計値は次のとおり。
+
+| 項目 | 値 |
+| --- | ---: |
+| 全13枚牌姿 | 98,521,596,000 |
+| 列挙された導出 | 93,251,547 |
+| tenpaiレポート | 54,747,045 |
+| reducible | 54,707,433 |
+| irreducible | 39,612 |
+| wait suppression | 305,454 |
+| redundant ambiguity | 3,512,763 |
+| pathological relation group | 853 |
+| wait-core cache hit | 58,282,047 |
+| wait-core cache miss / entry | 7,255,436 |
+
+導出数、tenpaiレポート数、reducible、irreducibleは旧実行と一致した。
+今回追加された病的構造の集計を含むレポートが、終了コード0で保存されたことも確認した。
+
+## 結論と次回の改善順序
+
+今回の直接の中断原因は、attempt 0では14時間上限、attempt 1ではSpot VM回収だった。
+根本的な長時間化については、全牌姿への追加判定、実質64個しかない非空bucket、
+bucket単位checkpointによる再計算、低いCPU利用率が確認できた。
+ただし、追加判定、cache競合、GC、I/Oそれぞれの寄与率はまだ分離できていない。
+
+次回は次の順で改善する。
+
+1. **分類内訳を測る。** bucket読込・group化、reducibility、病的構造判定、集計の各時間と、
    cache lookupのhit/miss、promise待ち、mutex待ちを区別する。
-   実行中ジョブには計測コードを差し込まない。
-3. **追加判定の重複処理を検討する。** 同じ牌姿のcore計算・面子除去・cache lookupを
-   共有できるか確認する。判定結果やwitnessの意味・順序を変えない回帰テストが前提。
-4. **bucket分布と保存粒度を見直す。** 単純剰余の制約を除き、全bucketを使用する。
+2. **追加判定の重複処理を検討する。** 同じ牌姿のcore計算・面子除去・cache lookupを
+   共有できるか確認する。判定結果やwitnessの意味・順序を変えない回帰テストを前提とする。
+3. **bucket分布と保存粒度を見直す。** 単純剰余の制約を除き、全bucketを使用する。
    形式を変える場合は旧checkpointと識別し、現在の結果を誤再利用しない。
    bucket内部のcheckpointは複雑さとの比較で判断する。
-5. **その後にworker数と実行上限を再設定する。** 32 worker化だけで速くなるとは限らない。
+4. **その後にworker数と実行上限を再設定する。** 32 worker化だけで速くなるとは限らない。
    同じ内容でCPU、RSS、wall timeを比較してから、現行の処理量に合う試行上限を設定する。
-   旧実行の約13.6 GiBを、追加判定後のメモリ使用量の保証として使わない。
-
-調査時点では分類処理内訳、現在の最大RSS、待ち時間、最終cache統計がない。
-したがって、病的構造判定・cache競合・GC・I/Oの寄与率や最終完了時刻は確定していない。
 
 ## 再確認用の読み取りコマンド
 
@@ -183,21 +232,23 @@ PROJECT=mahjong-formalization
 JOB=mahjong-thirteen-tile-6a2b4f7e-20261030-053317-846fba
 COMMIT=6a2b4f7ea4672ed1565cb203f63a77932f93998b
 
+gcloud batch jobs describe "$JOB" \
+  --location=us-central1 --project="$PROJECT" --format=json
 gcloud batch tasks describe 0 --job="$JOB" --task_group=group0 \
   --location=us-central1 --project="$PROJECT" --format=json
 
 gcloud logging read \
-  'labels.job_uid="mahjong-thirteen-t-e01c3702-266a-4bed0" AND logName="projects/mahjong-formalization/logs/batch_task_logs" AND timestamp>="2026-10-30T05:30:00Z" AND timestamp<="2026-10-31T01:42:00Z"' \
-  --project="$PROJECT" --limit=1200 --order=asc --format=json
+  'labels.job_uid="mahjong-thirteen-t-e01c3702-266a-4bed0" AND logName="projects/mahjong-formalization/logs/batch_task_logs" AND timestamp>="2026-10-30T05:30:00Z" AND timestamp<="2026-10-31T09:40:00Z"' \
+  --project="$PROJECT" --limit=2000 --order=asc --format=json
 
 gcloud storage ls -l \
-  "gs://mahjong-formalization-compute/checkpoints/thirteen-tile/$COMMIT/"
-gcloud storage ls -l \
-  "gs://mahjong-formalization-compute/jobs/$JOB/"
+  "gs://mahjong-formalization-compute/jobs/$JOB/**"
+gcloud storage cat \
+  "gs://mahjong-formalization-compute/jobs/$JOB/metadata.json"
 ```
 
-成功後はcheckpointが削除されるため、その時点の一覧から過去の状態は復元できない。
-ログの取得上限に達した場合は時間範囲を分ける。上記範囲では594ログを確認した。
+成功後はcheckpointが削除されるため、完了後の一覧から途中状態は復元できない。
+ログの取得上限に達した場合は時間範囲を分ける。
 CPUの再確認はMonitoring APIの`projects/mahjong-formalization/timeSeries`で
-`compute.googleapis.com/instance/cpu/utilization`、instance ID `770973858454409424`を指定し、
+`compute.googleapis.com/instance/cpu/utilization`と対象instance IDを指定し、
 `ALIGN_MEAN`、`alignmentPeriod=300s`で取得する。

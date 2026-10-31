@@ -12,7 +12,7 @@ on:
       - "reports/four-tile-direct-report.json"
       - "reports/seven-tile-report.json"
       - "reports/ten-tile-report.json"
-      - "reports/thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json"
+      - "reports/thirteen-tile-report.json"
   workflow_dispatch:
 
 permissions:

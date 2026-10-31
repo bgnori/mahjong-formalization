@@ -13,10 +13,7 @@ REPORT_PATHS = (
     Path("reports/four-tile-direct-report.json"),
     Path("reports/seven-tile-report.json"),
     Path("reports/ten-tile-report.json"),
-    Path(
-        "reports/"
-        "thirteen-tile-batch-mahjong-thirteen-tile-a0b1df03-20261011-073255-26e8c8.json"
-    ),
+    Path("reports/thirteen-tile-report.json"),
 )
 CLASSIFIER_FILES = ("index.html", "app.js", "classifier.js", "classification-table.js")
 

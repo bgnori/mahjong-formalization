@@ -244,6 +244,10 @@ Writer and maintenance notes:
 - [docs/remote-compute-gcp-batch.md](docs/remote-compute-gcp-batch.md): Japanese operating plan for remote computation with GCP Batch and Spot VMs.
 - [docs/remote-compute-platform-rationale-2026-10-09.md](docs/remote-compute-platform-rationale-2026-10-09.md):
   Japanese rationale for trialing GCP Batch and Spot VMs, including alternatives and review triggers.
+- [docs/thirteen-tile-dynamic-bucket-scheduling.md](docs/thirteen-tile-dynamic-bucket-scheduling.md):
+  Japanese design and full-run observations for dynamic bucket scheduling.
+- [docs/thirteen-tile-runtime-overrun-analysis-2026-10-31.md](docs/thirteen-tile-runtime-overrun-analysis-2026-10-31.md):
+  Japanese postmortem of the 13-tile full computation, retries, performance, and final results.
 - [Mahjong/README.md](Mahjong/README.md): module-level overview.
 
 ## Origin
