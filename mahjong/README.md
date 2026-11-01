@@ -79,6 +79,9 @@ fmt.Println(codes)
 The Tenhou-ID APIs and their validation behavior are unchanged. Both input
 formats normalize to the same 34-kind count vector and use the same classifier.
 
+Use the `development` dev container (or the equivalent default configuration),
+which includes Go for port validation. The ten-/thirteen-tile report containers
+do not include Go; their Lean computations are separate from port validation.
 Run the package tests from the repository root with:
 
 ```sh

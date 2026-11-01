@@ -3,9 +3,12 @@ package mahjong
 import (
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"testing"
 )
 
@@ -155,42 +158,135 @@ func TestInt37APIsMatchTenhouAPIs(t *testing.T) {
 	}
 	for _, notation := range hands {
 		t.Run(notation, func(t *testing.T) {
-			tileIDs := testTenhouIDs(t, notation)
-			int37Tiles := make([]int, len(tileIDs))
-			for index, tileID := range tileIDs {
-				int37Tiles[index] = testInt37OfTileID(tileID)
-			}
+			assertInt37APIsMatchTenhou(t, testTenhouIDs(t, notation))
+		})
+	}
+}
 
-			tenhouCodes, tenhouErr := WaitDecompositionCodes(tileIDs)
-			int37Codes, int37Err := WaitDecompositionCodesInt37(int37Tiles)
-			if tenhouErr != nil || int37Err != nil {
-				t.Fatalf("expected tenpai hand: Tenhou error %v, Int37 error %v", tenhouErr, int37Err)
-			}
-			if !errors.Is(tenhouErr, int37Err) || !equalIntSlices(tenhouCodes, int37Codes) {
-				t.Errorf("decomposition codes: Tenhou %v/%v, Int37 %v/%v", tenhouCodes, tenhouErr, int37Codes, int37Err)
-			}
+func TestInt37APIsMatchGeneratedTenhouHands(t *testing.T) {
+	random := rand.New(rand.NewSource(37))
+	melds := make([][]int, 0, 55)
+	for kind := 0; kind < tileTypeCount; kind++ {
+		melds = append(melds, []int{kind, kind, kind})
+	}
+	for suit := 0; suit < 3; suit++ {
+		for rank := 0; rank <= 6; rank++ {
+			start := suit*9 + rank
+			melds = append(melds, []int{start, start + 1, start + 2})
+		}
+	}
 
-			tenhouProfile, tenhouErr := PathologyProfileForHand(tileIDs)
-			int37Profile, int37Err := PathologyProfileForHandInt37(int37Tiles)
-			if !errors.Is(tenhouErr, int37Err) || tenhouProfile != int37Profile {
-				t.Errorf("pathology profile: Tenhou %s/%v, Int37 %s/%v", tenhouProfile, tenhouErr, int37Profile, int37Err)
-			}
+	for _, handSize := range []int{4, 7, 10, 13} {
+		t.Run(strconv.Itoa(handSize), func(t *testing.T) {
+			seen := make(map[[13]int]struct{})
+			for generated := 0; generated < 16; {
+				tileIDs := testTenhouIDs(t, "1223m")
+				var counts handCounts
+				var used [physicalTileCount]bool
+				for index, originalTileID := range tileIDs {
+					kind := originalTileID / 4
+					availableCopies := make([]int, 0, 4)
+					for copyNumber := 0; copyNumber < 4; copyNumber++ {
+						tileID := kind*4 + copyNumber
+						if !used[tileID] {
+							availableCopies = append(availableCopies, tileID)
+						}
+					}
+					tileID := availableCopies[random.Intn(len(availableCopies))]
+					tileIDs[index] = tileID
+					used[tileID] = true
+					counts[kind]++
+				}
 
-			tenhouClass, tenhouErr := ClassifyIrreducibleWait(tileIDs)
-			int37Class, int37Err := ClassifyIrreducibleWaitInt37(int37Tiles)
-			if !errors.Is(tenhouErr, int37Err) ||
-				!equalIntSlices(tenhouClass.WaitDecompositionCodes, int37Class.WaitDecompositionCodes) ||
-				tenhouClass.PathologyProfile != int37Class.PathologyProfile ||
-				tenhouClass.ClassificationID != int37Class.ClassificationID {
-				t.Errorf("classification: Tenhou %+v/%v, Int37 %+v/%v", tenhouClass, tenhouErr, int37Class, int37Err)
-			}
+				possible := true
+				for meldIndex := 0; meldIndex < (handSize-4)/3; meldIndex++ {
+					availableMelds := make([][]int, 0, len(melds))
+					for _, meld := range melds {
+						fits := true
+						meldCounts := make(map[int]uint8)
+						for _, kind := range meld {
+							meldCounts[kind]++
+							if counts[kind]+meldCounts[kind] > 4 {
+								fits = false
+								break
+							}
+						}
+						if fits {
+							availableMelds = append(availableMelds, meld)
+						}
+					}
+					if len(availableMelds) == 0 {
+						possible = false
+						break
+					}
 
-			tenhouID, tenhouErr := ClassifyIrreducibleWaitID(tileIDs)
-			int37ID, int37Err := ClassifyIrreducibleWaitIDInt37(int37Tiles)
-			if !errors.Is(tenhouErr, int37Err) || tenhouID != int37ID {
-				t.Errorf("classification ID: Tenhou %d/%v, Int37 %d/%v", tenhouID, tenhouErr, int37ID, int37Err)
+					for _, kind := range availableMelds[random.Intn(len(availableMelds))] {
+						availableCopies := make([]int, 0, 4)
+						for copyNumber := 0; copyNumber < 4; copyNumber++ {
+							tileID := kind*4 + copyNumber
+							if !used[tileID] {
+								availableCopies = append(availableCopies, tileID)
+							}
+						}
+						tileID := availableCopies[random.Intn(len(availableCopies))]
+						used[tileID] = true
+						counts[kind]++
+						tileIDs = append(tileIDs, tileID)
+					}
+				}
+				if !possible {
+					continue
+				}
+
+				sort.Ints(tileIDs)
+				var key [13]int
+				copy(key[:], tileIDs)
+				if _, duplicate := seen[key]; duplicate {
+					continue
+				}
+				seen[key] = struct{}{}
+				generated++
+				assertInt37APIsMatchTenhou(t, tileIDs)
 			}
 		})
+	}
+}
+
+func assertInt37APIsMatchTenhou(t *testing.T, tileIDs []int) {
+	t.Helper()
+	int37Tiles := make([]int, len(tileIDs))
+	for index, tileID := range tileIDs {
+		int37Tiles[index] = testInt37OfTileID(tileID)
+	}
+
+	tenhouCodes, tenhouErr := WaitDecompositionCodes(tileIDs)
+	int37Codes, int37Err := WaitDecompositionCodesInt37(int37Tiles)
+	if tenhouErr != nil || int37Err != nil {
+		t.Fatalf("expected tenpai hand: Tenhou error %v, Int37 error %v", tenhouErr, int37Err)
+	}
+	if !errors.Is(tenhouErr, int37Err) || !equalIntSlices(tenhouCodes, int37Codes) {
+		t.Errorf("decomposition codes: Tenhou %v/%v, Int37 %v/%v", tenhouCodes, tenhouErr, int37Codes, int37Err)
+	}
+
+	tenhouProfile, tenhouErr := PathologyProfileForHand(tileIDs)
+	int37Profile, int37Err := PathologyProfileForHandInt37(int37Tiles)
+	if !errors.Is(tenhouErr, int37Err) || tenhouProfile != int37Profile {
+		t.Errorf("pathology profile: Tenhou %s/%v, Int37 %s/%v", tenhouProfile, tenhouErr, int37Profile, int37Err)
+	}
+
+	tenhouClass, tenhouErr := ClassifyIrreducibleWait(tileIDs)
+	int37Class, int37Err := ClassifyIrreducibleWaitInt37(int37Tiles)
+	if !errors.Is(tenhouErr, int37Err) ||
+		!equalIntSlices(tenhouClass.WaitDecompositionCodes, int37Class.WaitDecompositionCodes) ||
+		tenhouClass.PathologyProfile != int37Class.PathologyProfile ||
+		tenhouClass.ClassificationID != int37Class.ClassificationID {
+		t.Errorf("classification: Tenhou %+v/%v, Int37 %+v/%v", tenhouClass, tenhouErr, int37Class, int37Err)
+	}
+
+	tenhouID, tenhouErr := ClassifyIrreducibleWaitID(tileIDs)
+	int37ID, int37Err := ClassifyIrreducibleWaitIDInt37(int37Tiles)
+	if !errors.Is(tenhouErr, int37Err) || tenhouID != int37ID {
+		t.Errorf("classification ID: Tenhou %d/%v, Int37 %d/%v", tenhouID, tenhouErr, int37ID, int37Err)
 	}
 }
 

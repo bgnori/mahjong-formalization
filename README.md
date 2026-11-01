@@ -177,17 +177,23 @@ not byte-identical. Compare against `reports/seven-tile-report.json` with
 
 ### Dev containers by workload
 
-Choose a dev container configuration based on the output being generated:
+Choose a dev container configuration based on the workload:
 
-| Configuration | Workload | Minimum host requirements |
-| --- | --- | --- |
-| `development` | Normal editing, proofs, tests, and four-/seven-tile reports | None declared |
-| `ten-tile` | Ten-tile report | 4 CPUs, 4 GB RAM, 32 GB storage |
-| `thirteen-tile` | Thirteen-tile report | 16 CPUs, 64 GB RAM, 64 GB storage |
+| Configuration | Workload | Go | Minimum host requirements |
+| --- | --- | --- | --- |
+| `development` | Normal editing, proofs, tests, Go port validation, and four-/seven-tile reports | Included | None declared |
+| `ten-tile` | Ten-tile report | Not included | 4 CPUs, 4 GB RAM, 32 GB storage |
+| `thirteen-tile` | Thirteen-tile report | Not included | 16 CPUs, 64 GB RAM, 64 GB storage |
 
 Select the configuration when opening the repository in a VS Code dev container or in the
 Codespace creation options. Use `development` for normal local work and select a report-specific
 configuration only when generating that report.
+
+The default `.devcontainer/devcontainer.json` also uses the `development` configuration.
+Go is installed only in the development configurations used to validate the port.
+Run `go test ./mahjong` from the repository root to check agreement with Lean-derived
+reports, among other tests. Tile-report generation validates the Lean classification
+and does not require Go. The remote-compute Docker images do not install Go either.
 
 `hostRequirements` helps services such as Codespaces choose a suitable host; it does not impose
 Docker resource limits. None of the configurations sets Docker CPU or memory limits. After creating
