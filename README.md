@@ -30,6 +30,7 @@ A Lean 4 formalization and computational study of Mahjong mathematics. The proje
 │   └── README.md
 ├── MahjongTests/          # Explicitly-built computational regression tests
 ├── MahjongComputations/   # Explicitly-built exhaustive computations and reports
+├── mahjong/               # Importable Go classification package
 ├── docs/                  # Reading order and Lean/domain vocabulary
 └── reports/               # Generated computation reports
 ```
@@ -113,6 +114,16 @@ have the same decomposition codes and component-relation classification.
 At ten tiles the property fails even for irreducible hands: healthy
 `2333345777p` and redundantly ambiguous `3335666678s` have the same
 classification.
+
+### Go package
+
+The irreducible decomposition classifier and pathology-profile classifier are
+also available as the importable Go package
+`github.com/bgnori/mahjong-formalization/mahjong`. It accepts Tenhou physical
+tile IDs (`0..135`), including red fives. `ClassifyIrreducibleWait` returns
+decomposition codes, pathology profile, and stable classification ID;
+`PathologyProfileForHand` checks the input hand itself, including reducible
+hands. See [`mahjong/README.md`](mahjong/README.md) for usage and testing.
 
 ### GCP Batch pilot
 

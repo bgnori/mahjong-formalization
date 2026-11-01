@@ -30,6 +30,7 @@
 │   └── README.md
 ├── MahjongTests/         # 計算量の大きい回帰テスト
 ├── MahjongComputations/  # 全列挙と集計レポート
+├── mahjong/              # 外部import可能なGo分類パッケージ
 ├── docs/                 # 読書順、Lean語彙、プロジェクト語彙
 └── reports/              # 生成済みレポート
 ```
@@ -97,6 +98,20 @@ lake build sevenTileReport
 `3335666678s`（冗長曖昧性）は同じ待ち分解コード・部品関係分類を持つ。
 旧v2レポートも引き続き閲覧できるが、この追加情報を見るには再生成が必要。
 10・13枚形の旧分類checkpointは再利用せず、生成済みbucketから分類を再計算する。
+
+### Goからの利用
+
+既約形への分解分類と病的プロファイル判定は、外部モジュールからimportできるGoパッケージ
+`github.com/bgnori/mahjong-formalization/mahjong` としても利用できる。入力はTenhou形式の
+物理牌ID（0〜135）で、赤5も受け付ける。`ClassifyIrreducibleWait` は分解コード・病的プロファイル・
+安定した分類IDを返し、`PathologyProfileForHand` は可約形も含む入力牌姿自体の病的プロファイルを返す。
+
+```go
+result, err := mahjong.ClassifyIrreducibleWait([]int{0, 4, 5, 8})
+```
+
+利用例、エラー、`go test ./mahjong`、固定分類表の再生成方法は
+[`mahjong/README.md`](mahjong/README.md) を参照。
 
 ### GCP Batchでの試行
 
