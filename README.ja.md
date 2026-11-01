@@ -160,6 +160,9 @@ VS Codeでコンテナを開くとき、またはCodespaceの作成オプショ�
 構成を使う。
 
 既定の`.devcontainer/devcontainer.json`も`development`と同じ開発用構成である。
+全構成で共通の`.devcontainer/Dockerfile`を使い、リモート計算の管理用にGoogle Cloud CLI
+（`gcloud`）を導入する。既存コンテナはrebuild後に`gcloud --version`で確認する。
+認証は別途`gcloud auth login --no-launch-browser`で行い、イメージに認証情報は含めない。
 Goは移植の検証を行う開発用構成にのみ導入する。リポジトリのルートで`go test ./mahjong`を
 実行して、Lean由来のレポートとの一致などを検証する。n枚形レポートの生成はLeanによる分類の
 検証であり、Goを必要としない。リモート計算用DockerイメージにもGoは導入しない。

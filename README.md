@@ -190,6 +190,10 @@ Codespace creation options. Use `development` for normal local work and select a
 configuration only when generating that report.
 
 The default `.devcontainer/devcontainer.json` also uses the `development` configuration.
+All configurations share `.devcontainer/Dockerfile` and include Google Cloud CLI (`gcloud`)
+for remote computation management. Rebuild existing containers to install it, then verify with
+`gcloud --version`. Authenticate separately with `gcloud auth login --no-launch-browser`;
+credentials are not included in the image.
 Go is installed only in the development configurations used to validate the port.
 Run `go test ./mahjong` from the repository root to check agreement with Lean-derived
 reports, among other tests. Tile-report generation validates the Lean classification
