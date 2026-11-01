@@ -147,17 +147,22 @@ wait-coreキャッシュはプロセス内にしか存在しないためで、�
 
 ### 用途別devcontainer
 
-devcontainerは、生成する内容に応じて次の3構成から選択する。
+devcontainerは、作業の用途に応じて次の3構成から選択する。
 
-| 構成 | 用途 | ホスト最低要件 |
-| --- | --- | --- |
-| `development` | 通常の編集・証明・テスト、4枚形・7枚形レポート | 指定なし |
-| `ten-tile` | 10枚形レポート | 4 CPU、4 GB RAM、32 GB storage |
-| `thirteen-tile` | 13枚形レポート | 16 CPU、64 GB RAM、64 GB storage |
+| 構成 | 用途 | Go | ホスト最低要件 |
+| --- | --- | --- | --- |
+| `development` | 通常の編集・証明・テスト、Go移植の検証、4枚形・7枚形レポート | あり | 指定なし |
+| `ten-tile` | 10枚形レポート | なし | 4 CPU、4 GB RAM、32 GB storage |
+| `thirteen-tile` | 13枚形レポート | なし | 16 CPU、64 GB RAM、64 GB storage |
 
 VS Codeでコンテナを開くとき、またはCodespaceの作成オプションで、使用するdevcontainer構成を
 選択する。通常のローカル作業では`development`を使い、重いレポートを生成するときだけ対応する
 構成を使う。
+
+既定の`.devcontainer/devcontainer.json`も`development`と同じ開発用構成である。
+Goは移植の検証を行う開発用構成にのみ導入する。リポジトリのルートで`go test ./mahjong`を
+実行して、Lean由来のレポートとの一致などを検証する。n枚形レポートの生成はLeanによる分類の
+検証であり、Goを必要としない。リモート計算用DockerイメージにもGoは導入しない。
 
 `hostRequirements`はCodespacesなどが適切なホストを選ぶための最低要件であり、Dockerの資源上限
 ではない。どの構成もDockerの`--cpus`・`--memory`制限を設定していない。Codespace作成後は次を

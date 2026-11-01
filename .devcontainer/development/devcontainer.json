@@ -11,6 +11,9 @@
       "username": "vscode",
       "userUid": "automatic",
       "userGid": "automatic"
+    },
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.22.12"
     }
   },
   "customizations": {
