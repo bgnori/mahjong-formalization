@@ -2,6 +2,12 @@
 
 A Lean 4 formalization and computational study of Mahjong mathematics. The project models tiles, tile patterns, standard-form wait semantics, wait cores, and exhaustive classifications, with machine-checked specifications and executable reports.
 
+**The Lean implementation is the authoritative specification.** The Python and
+Go implementations are subordinate ports for external use and cross-checking;
+they do not define independent specifications. If their behavior or
+documentation differs, the Lean definitions under [`Mahjong/`](Mahjong/) take
+precedence.
+
 [Browse the computation results](https://bgnori.github.io/mahjong-formalization/)
 
 [日本語版はこちら](README.ja.md)
@@ -123,7 +129,9 @@ also available as the importable Go package
 tile IDs (`0..135`), including red fives. `ClassifyIrreducibleWait` returns
 decomposition codes, pathology profile, and stable classification ID;
 `PathologyProfileForHand` checks the input hand itself, including reducible
-hands. See [`mahjong/README.md`](mahjong/README.md) for usage and testing.
+hands. This package is subordinate to the Lean specification: specification
+changes must be made in Lean first and then ported to Go. See
+[`mahjong/README.md`](mahjong/README.md) for usage and testing.
 
 ### GCP Batch pilot
 
@@ -217,13 +225,15 @@ the exact wait-core set, and classifies the irreducible result by its decomposit
 codes plus pathology profile (`healthy`, `suppressionOnly`, `ambiguityOnly`, or
 `both`). Pathology marks use the same one-meld-removal comparisons as Lean.
 Red-five identity is ignored because every physical ID is normalized with `id // 4`.
+This sample is subordinate to the Lean specification and must not be used as an
+independent source of specification.
 
 ```python
 from irreducible_wait_classifier import classify_irreducible_wait
 
 classification = classify_irreducible_wait([0, 4, 5, 8])  # 1223m
 classification.key  # (wait-decomposition codes, pathology profile)
-classification.pathology_profile.value  # "healthy"
+classification.pathology_profile.value  # "ambiguityOnly"
 classification.classification_id  # legacy code-only ID: 5
 ```
 

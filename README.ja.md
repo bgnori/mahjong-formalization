@@ -2,6 +2,10 @@
 
 麻雀の数理を Lean 4 で形式化し、計算によって研究するリポジトリです。牌、牌姿、通常形の待ちの意味論、待ち核、既約分類などを、機械検証された仕様と全列挙レポートとして扱います。
 
+**仕様の正本はLean実装です。** PythonとGoの実装は、外部利用や相互検証のためにLeanの定義と
+計算結果を移植した従属実装であり、独立した仕様を定めるものではありません。挙動や記述に不一致が
+ある場合は、[`Mahjong/`](Mahjong/) 以下のLean定義を優先します。
+
 [計算結果をWebで見る](https://bgnori.github.io/mahjong-formalization/)
 
 [English version](README.md)
@@ -105,6 +109,8 @@ lake build sevenTileReport
 `github.com/bgnori/mahjong-formalization/mahjong` としても利用できる。入力はTenhou形式の
 物理牌ID（0〜135）で、赤5も受け付ける。`ClassifyIrreducibleWait` は分解コード・病的プロファイル・
 安定した分類IDを返し、`PathologyProfileForHand` は可約形も含む入力牌姿自体の病的プロファイルを返す。
+このパッケージはLean仕様の従属実装であり、仕様変更は先にLeanへ反映し、その結果にGo実装を
+追従させる。
 
 ```go
 result, err := mahjong.ClassifyIrreducibleWait([]int{0, 4, 5, 8})
@@ -201,13 +207,14 @@ Tenhou 136 ID列で受け取り、`waitDecompositionCodes`を計算する。さ�
 再帰的に除去する。既約結果の主分類キーは「待ち分解コード＋病的プロファイル」
 （健全・待ち抑制のみ・冗長曖昧性のみ・両方）で、病的マークもLeanと同じく完成面子を1つ除去して
 判定する。赤5と通常の5は物理牌IDを`id // 4`で牌種へ正規化するため区別しない。
+このサンプルもLean仕様の従属実装であり、Pythonコード自体を仕様の根拠にはしない。
 
 ```python
 from irreducible_wait_classifier import classify_irreducible_wait
 
 classification = classify_irreducible_wait([0, 4, 5, 8])  # 1223m
 classification.key  # (待ち分解コード, 病的プロファイル)
-classification.pathology_profile.value  # "healthy"
+classification.pathology_profile.value  # "ambiguityOnly"
 classification.classification_id  # 旧形式のコード単独ID: 5
 ```
 
