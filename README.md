@@ -133,6 +133,18 @@ hands. This package is subordinate to the Lean specification: specification
 changes must be made in Lean first and then ported to Go. See
 [`mahjong/README.md`](mahjong/README.md) for usage and testing.
 
+The package also provides `WaitDecompositionCodesInt37`,
+`PathologyProfileForHandInt37`, `ClassifyIrreducibleWaitInt37`, and
+`ClassifyIrreducibleWaitIDInt37` for the versioned `aka37-int37/v1` input
+format. Each `int` is one closed tile: `0..9`, `10..19`, and `20..29` encode
+manzu, pinzu, and souzu respectively: `0`, `10`, and `20` are red fives;
+`1..9`, `11..19`, and `21..29` encode ranks `1..9` in each suit. `30..36`
+encode honors `1z..7z`. Repeated values represent copies, with at most four of
+a kind, at most one red five and three ordinary fives per suit, and at most
+four fives combined per suit. Red and ordinary fives normalize to the same
+classifier kind. For example, `[1, 2, 2, 3]` represents `1223m`; melds and
+physical copy identity are not represented.
+
 ### GCP Batch pilot
 
 The four-, seven-, ten-, and thirteen-tile reports can all be run through the

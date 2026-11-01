@@ -2,8 +2,9 @@
 
 The Go package at `github.com/bgnori/mahjong-formalization/mahjong` classifies
 standard-form tenpai hands by wait decomposition and pathology profile. Inputs
-are slices of Tenhou's 136 physical tile IDs (`0..135`); red fives are accepted
-and treated as the corresponding five tile type.
+can be supplied as slices of Tenhou's 136 physical tile IDs (`0..135`) or with
+the explicit Int37 APIs described below. Red fives are accepted and treated as
+the corresponding ordinary five tile type by the classifier.
 
 ## Specification authority
 
@@ -47,6 +48,36 @@ Supported hand sizes are 4, 7, 10, and 13 tiles. Invalid physical IDs,
 duplicate IDs, non-tenpai hands, and unknown or ambiguous reductions are
 returned as errors. Use `errors.Is` with `ErrInvalidHand`, `ErrNotTenpai`,
 `ErrUnknownClassification`, or `ErrAmbiguousReduction` to check error kinds.
+
+## Int37 input (`aka37-int37/v1`)
+
+Use the `Int37` suffix variants to pass one Int37 value per closed tile:
+
+- `WaitDecompositionCodesInt37`
+- `PathologyProfileForHandInt37`
+- `ClassifyIrreducibleWaitInt37`
+- `ClassifyIrreducibleWaitIDInt37`
+
+Supported hand sizes are 4, 7, 10, and 13. Int37 `0`, `10`, and `20` are red
+fives in manzu, pinzu, and souzu; `1..9`, `11..19`, and `21..29` encode ranks
+`1..9` in those suits. Values `30..36` encode honors `1z..7z`. Repeated values
+represent copies of the same kind; unlike Tenhou IDs, repeated Int37 values are
+expected and do not indicate duplicate physical tiles. Each non-five kind may
+occur at most four times; each red five at most once; each ordinary five at
+most three times; and red plus ordinary fives per suit at most four times. Red
+fives are normalized to their ordinary five kind before classification. This
+format represents only closed tiles, not melds or physical copy identity.
+
+```go
+codes, err := mahjong.WaitDecompositionCodesInt37([]int{1, 2, 2, 3}) // 1223m
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(codes)
+```
+
+The Tenhou-ID APIs and their validation behavior are unchanged. Both input
+formats normalize to the same 34-kind count vector and use the same classifier.
 
 Run the package tests from the repository root with:
 
