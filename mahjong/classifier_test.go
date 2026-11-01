@@ -35,6 +35,211 @@ func testTenhouIDs(t *testing.T, notation string) []int {
 	return tileIDs
 }
 
+func testInt37OfTileID(tileID int) int {
+	kind := tileID / 4
+	copyNumber := tileID % 4
+	if kind >= 27 {
+		return 30 + kind - 27
+	}
+	suit := kind / 9
+	rank := kind%9 + 1
+	offset := suit * 10
+	if rank == 5 && copyNumber == 0 {
+		return offset
+	}
+	return offset + rank
+}
+
+func testKindFromInt37(tile int) int {
+	switch {
+	case tile == 0:
+		return 4
+	case tile >= 1 && tile <= 9:
+		return tile - 1
+	case tile == 10:
+		return 13
+	case tile >= 11 && tile <= 19:
+		return tile - 2
+	case tile == 20:
+		return 22
+	case tile >= 21 && tile <= 29:
+		return tile - 3
+	default:
+		return tile - 3
+	}
+}
+
+func TestInt37MappingCoversEveryTenhouPhysicalID(t *testing.T) {
+	for kind := 0; kind < 34; kind++ {
+		var projectedKind int
+		for copyNumber := 0; copyNumber < 4; copyNumber++ {
+			tileID := kind*4 + copyNumber
+			int37 := testInt37OfTileID(tileID)
+			projectedKind = testKindFromInt37(int37)
+			if projectedKind != kind {
+				t.Errorf("physical tile ID %d maps to kind %d, want id/4 kind %d", tileID, projectedKind, kind)
+			}
+
+			hand := []int{int37}
+			for filler := 0; len(hand) < 4; filler++ {
+				if testKindFromInt37(filler) != projectedKind {
+					hand = append(hand, filler)
+				}
+			}
+			counts, err := countsFromInt37(hand)
+			if err != nil {
+				t.Fatalf("physical tile ID %d -> Int37 %d: %v", tileID, int37, err)
+			}
+			if counts[kind] != 1 {
+				t.Errorf("physical tile ID %d -> Int37 %d projected to counts %v", tileID, int37, counts)
+			}
+		}
+	}
+
+	for tileID, want := range map[int]int{16: 0, 52: 10, 88: 20, 17: 5, 53: 15, 89: 25} {
+		if got := testInt37OfTileID(tileID); got != want {
+			t.Errorf("physical tile ID %d maps to Int37 %d, want %d", tileID, got, want)
+		}
+	}
+}
+
+func TestInt37Validation(t *testing.T) {
+	validAtCapacity := []int{1, 1, 1, 1, 2, 3, 4}
+	if _, err := countsFromInt37(validAtCapacity); err != nil {
+		t.Fatalf("four copies of a non-five kind should be accepted: %v", err)
+	}
+	validFives := []int{0, 5, 5, 5}
+	if _, err := countsFromInt37(validFives); err != nil {
+		t.Fatalf("one red and three ordinary fives should be accepted: %v", err)
+	}
+
+	for _, hand := range [][]int{
+		{1, 2, 3},
+		{1, 2, 3, 4, 5},
+		{-1, 1, 2, 3},
+		{37, 1, 2, 3},
+		{0, 0, 1, 2},
+		{5, 5, 5, 5},
+		{1, 1, 1, 1, 1, 2, 3},
+		{0, 5, 5, 5, 5, 1, 2},
+	} {
+		if _, err := countsFromInt37(hand); !errors.Is(err, ErrInvalidHand) {
+			t.Errorf("%v: got error %v, want ErrInvalidHand", hand, err)
+		}
+	}
+
+	invalid := []int{0, 0, 1, 2}
+	publicAPIs := []struct {
+		name string
+		call func() error
+	}{
+		{"WaitDecompositionCodesInt37", func() error { _, err := WaitDecompositionCodesInt37(invalid); return err }},
+		{"PathologyProfileForHandInt37", func() error { _, err := PathologyProfileForHandInt37(invalid); return err }},
+		{"ClassifyIrreducibleWaitInt37", func() error { _, err := ClassifyIrreducibleWaitInt37(invalid); return err }},
+		{"ClassifyIrreducibleWaitIDInt37", func() error { _, err := ClassifyIrreducibleWaitIDInt37(invalid); return err }},
+	}
+	for _, api := range publicAPIs {
+		if err := api.call(); !errors.Is(err, ErrInvalidHand) {
+			t.Errorf("%s: got error %v, want ErrInvalidHand", api.name, err)
+		}
+	}
+}
+
+func TestInt37APIsMatchTenhouAPIs(t *testing.T) {
+	hands := []string{
+		"1223m",
+		"1223m111z",
+		"1223m111222z",
+		"1223m111222333z",
+		"05m12p",
+	}
+	for _, notation := range hands {
+		t.Run(notation, func(t *testing.T) {
+			tileIDs := testTenhouIDs(t, notation)
+			int37Tiles := make([]int, len(tileIDs))
+			for index, tileID := range tileIDs {
+				int37Tiles[index] = testInt37OfTileID(tileID)
+			}
+
+			tenhouCodes, tenhouErr := WaitDecompositionCodes(tileIDs)
+			int37Codes, int37Err := WaitDecompositionCodesInt37(int37Tiles)
+			if tenhouErr != nil || int37Err != nil {
+				t.Fatalf("expected tenpai hand: Tenhou error %v, Int37 error %v", tenhouErr, int37Err)
+			}
+			if !errors.Is(tenhouErr, int37Err) || !equalIntSlices(tenhouCodes, int37Codes) {
+				t.Errorf("decomposition codes: Tenhou %v/%v, Int37 %v/%v", tenhouCodes, tenhouErr, int37Codes, int37Err)
+			}
+
+			tenhouProfile, tenhouErr := PathologyProfileForHand(tileIDs)
+			int37Profile, int37Err := PathologyProfileForHandInt37(int37Tiles)
+			if !errors.Is(tenhouErr, int37Err) || tenhouProfile != int37Profile {
+				t.Errorf("pathology profile: Tenhou %s/%v, Int37 %s/%v", tenhouProfile, tenhouErr, int37Profile, int37Err)
+			}
+
+			tenhouClass, tenhouErr := ClassifyIrreducibleWait(tileIDs)
+			int37Class, int37Err := ClassifyIrreducibleWaitInt37(int37Tiles)
+			if !errors.Is(tenhouErr, int37Err) ||
+				!equalIntSlices(tenhouClass.WaitDecompositionCodes, int37Class.WaitDecompositionCodes) ||
+				tenhouClass.PathologyProfile != int37Class.PathologyProfile ||
+				tenhouClass.ClassificationID != int37Class.ClassificationID {
+				t.Errorf("classification: Tenhou %+v/%v, Int37 %+v/%v", tenhouClass, tenhouErr, int37Class, int37Err)
+			}
+
+			tenhouID, tenhouErr := ClassifyIrreducibleWaitID(tileIDs)
+			int37ID, int37Err := ClassifyIrreducibleWaitIDInt37(int37Tiles)
+			if !errors.Is(tenhouErr, int37Err) || tenhouID != int37ID {
+				t.Errorf("classification ID: Tenhou %d/%v, Int37 %d/%v", tenhouID, tenhouErr, int37ID, int37Err)
+			}
+		})
+	}
+}
+
+func TestInt37RedFiveSubstitutionPreservesClassification(t *testing.T) {
+	red := []int{0, 5, 11, 12}
+	ordinary := []int{5, 5, 11, 12}
+
+	redCodes, redErr := WaitDecompositionCodesInt37(red)
+	ordinaryCodes, ordinaryErr := WaitDecompositionCodesInt37(ordinary)
+	if redErr != nil || ordinaryErr != nil || !equalIntSlices(redCodes, ordinaryCodes) {
+		t.Fatalf("decomposition codes differ: red %v/%v, ordinary %v/%v", redCodes, redErr, ordinaryCodes, ordinaryErr)
+	}
+
+	redProfile, redErr := PathologyProfileForHandInt37(red)
+	ordinaryProfile, ordinaryErr := PathologyProfileForHandInt37(ordinary)
+	if redErr != nil || ordinaryErr != nil || redProfile != ordinaryProfile {
+		t.Fatalf("pathology profiles differ: red %s/%v, ordinary %s/%v", redProfile, redErr, ordinaryProfile, ordinaryErr)
+	}
+
+	redClass, redErr := ClassifyIrreducibleWaitInt37(red)
+	ordinaryClass, ordinaryErr := ClassifyIrreducibleWaitInt37(ordinary)
+	if redErr != nil || ordinaryErr != nil ||
+		!equalIntSlices(redClass.WaitDecompositionCodes, ordinaryClass.WaitDecompositionCodes) ||
+		redClass.PathologyProfile != ordinaryClass.PathologyProfile ||
+		redClass.ClassificationID != ordinaryClass.ClassificationID {
+		t.Fatalf("classifications differ: red %+v/%v, ordinary %+v/%v", redClass, redErr, ordinaryClass, ordinaryErr)
+	}
+
+	redID, redErr := ClassifyIrreducibleWaitIDInt37(red)
+	ordinaryID, ordinaryErr := ClassifyIrreducibleWaitIDInt37(ordinary)
+	if redErr != nil || ordinaryErr != nil || redID != ordinaryID {
+		t.Fatalf("classification IDs differ: red %d/%v, ordinary %d/%v", redID, redErr, ordinaryID, ordinaryErr)
+	}
+}
+
+func TestInt37ErrorsMatchTenhouClassificationErrors(t *testing.T) {
+	tileIDs := testTenhouIDs(t, "1111m")
+	int37Tiles := make([]int, len(tileIDs))
+	for index, tileID := range tileIDs {
+		int37Tiles[index] = testInt37OfTileID(tileID)
+	}
+	if _, err := ClassifyIrreducibleWait(tileIDs); !errors.Is(err, ErrNotTenpai) {
+		t.Fatalf("Tenhou input: got %v, want ErrNotTenpai", err)
+	}
+	if _, err := ClassifyIrreducibleWaitInt37(int37Tiles); !errors.Is(err, ErrNotTenpai) {
+		t.Fatalf("Int37 input: got %v, want ErrNotTenpai", err)
+	}
+}
+
 func TestAllReportClassificationsKeepFixedIDs(t *testing.T) {
 	reports := []struct {
 		tileCount int

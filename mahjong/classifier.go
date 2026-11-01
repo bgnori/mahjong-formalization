@@ -16,8 +16,7 @@ const (
 )
 
 var (
-	// ErrInvalidHand means the input is not a legal supported hand of physical
-	// Tenhou tile IDs.
+	// ErrInvalidHand means the input is not a legal supported hand.
 	ErrInvalidHand = errors.New("invalid hand")
 	// ErrNotTenpai means the hand has no standard-form wait.
 	ErrNotTenpai = errors.New("hand is not a standard-form tenpai hand")
@@ -134,6 +133,74 @@ func countsFromTileIDs(tileIDs []int) (handCounts, error) {
 	return counts, nil
 }
 
+func countsFromInt37(int37Tiles []int) (handCounts, error) {
+	var counts handCounts
+	switch len(int37Tiles) {
+	case 4, 7, 10, 13:
+	default:
+		return counts, fmt.Errorf("%w: hand size must be one of 4, 7, 10, or 13", ErrInvalidHand)
+	}
+
+	var redFives [3]uint8
+	var ordinaryFives [3]uint8
+	for _, tile := range int37Tiles {
+		if tile < 0 || tile > 36 {
+			return counts, fmt.Errorf("%w: Int37 value %d is outside 0..36", ErrInvalidHand, tile)
+		}
+
+		kind := 0
+		suit := -1
+		switch {
+		case tile == 0:
+			kind, suit = 4, 0
+			redFives[suit]++
+		case tile >= 1 && tile <= 9:
+			kind = tile - 1
+			if tile == 5 {
+				suit = 0
+				ordinaryFives[suit]++
+			}
+		case tile == 10:
+			kind, suit = 13, 1
+			redFives[suit]++
+		case tile >= 11 && tile <= 19:
+			kind = tile - 2
+			if tile == 15 {
+				suit = 1
+				ordinaryFives[suit]++
+			}
+		case tile == 20:
+			kind, suit = 22, 2
+			redFives[suit]++
+		case tile >= 21 && tile <= 29:
+			kind = tile - 3
+			if tile == 25 {
+				suit = 2
+				ordinaryFives[suit]++
+			}
+		default:
+			kind = tile - 3
+		}
+
+		counts[kind]++
+		if counts[kind] > 4 {
+			return handCounts{}, fmt.Errorf("%w: Int37 tile kind %d occurs more than four times", ErrInvalidHand, kind)
+		}
+		if suit >= 0 {
+			if redFives[suit] > 1 {
+				return handCounts{}, fmt.Errorf("%w: red five in suit %d occurs more than once", ErrInvalidHand, suit)
+			}
+			if ordinaryFives[suit] > 3 {
+				return handCounts{}, fmt.Errorf("%w: ordinary five in suit %d occurs more than three times", ErrInvalidHand, suit)
+			}
+			if int(redFives[suit])+int(ordinaryFives[suit]) > 4 {
+				return handCounts{}, fmt.Errorf("%w: fives in suit %d occur more than four times", ErrInvalidHand, suit)
+			}
+		}
+	}
+	return counts, nil
+}
+
 // WaitDecompositionCodes returns the sorted waitDecompositionCodes for a hand.
 // tileIDs are Tenhou 136-tile physical IDs (0 through 135); red fives map to
 // their ordinary five tile type. Supported hand sizes are 4, 7, 10, and 13.
@@ -142,6 +209,22 @@ func WaitDecompositionCodes(tileIDs []int) ([]int, error) {
 	if err != nil {
 		return nil, err
 	}
+	return waitDecompositionCodesFromCounts(counts)
+}
+
+// WaitDecompositionCodesInt37 returns sorted wait-decomposition codes for closed
+// tiles encoded as Int37 values (0..36), with lengths 4, 7, 10, or 13. Repeated
+// values represent copies; red fives project to ordinary five kinds. Schema:
+// aka37-int37/v1.
+func WaitDecompositionCodesInt37(int37Tiles []int) ([]int, error) {
+	counts, err := countsFromInt37(int37Tiles)
+	if err != nil {
+		return nil, err
+	}
+	return waitDecompositionCodesFromCounts(counts)
+}
+
+func waitDecompositionCodesFromCounts(counts handCounts) ([]int, error) {
 	result := newAnalyzer().analyze(counts)
 	if len(result.codes) == 0 {
 		return nil, ErrNotTenpai
@@ -157,6 +240,22 @@ func PathologyProfileForHand(tileIDs []int) (PathologyProfile, error) {
 	if err != nil {
 		return "", err
 	}
+	return pathologyProfileForCounts(counts)
+}
+
+// PathologyProfileForHandInt37 checks pathology marks on closed tiles encoded
+// as Int37 values (0..36), with lengths 4, 7, 10, or 13. Repeated values
+// represent copies; red fives project to ordinary five kinds. Schema:
+// aka37-int37/v1.
+func PathologyProfileForHandInt37(int37Tiles []int) (PathologyProfile, error) {
+	counts, err := countsFromInt37(int37Tiles)
+	if err != nil {
+		return "", err
+	}
+	return pathologyProfileForCounts(counts)
+}
+
+func pathologyProfileForCounts(counts handCounts) (PathologyProfile, error) {
 	a := newAnalyzer()
 	if len(a.analyze(counts).codes) == 0 {
 		return "", ErrNotTenpai
@@ -172,6 +271,21 @@ func ClassifyIrreducibleWait(tileIDs []int) (IrreducibleWaitClassification, erro
 	if err != nil {
 		return IrreducibleWaitClassification{}, err
 	}
+	return classifyIrreducibleWaitFromCounts(counts)
+}
+
+// ClassifyIrreducibleWaitInt37 classifies closed tiles encoded as Int37 values
+// (0..36), with lengths 4, 7, 10, or 13. Repeated values represent copies; red
+// fives project to ordinary five kinds. Schema: aka37-int37/v1.
+func ClassifyIrreducibleWaitInt37(int37Tiles []int) (IrreducibleWaitClassification, error) {
+	counts, err := countsFromInt37(int37Tiles)
+	if err != nil {
+		return IrreducibleWaitClassification{}, err
+	}
+	return classifyIrreducibleWaitFromCounts(counts)
+}
+
+func classifyIrreducibleWaitFromCounts(counts handCounts) (IrreducibleWaitClassification, error) {
 	a := newAnalyzer()
 	original := a.analyze(counts)
 	if len(original.codes) == 0 {
@@ -182,7 +296,7 @@ func ClassifyIrreducibleWait(tileIDs []int) (IrreducibleWaitClassification, erro
 	if len(classifications) == 0 {
 		return IrreducibleWaitClassification{}, fmt.Errorf(
 			"%w: no fixed classification reachable from (%d tiles, %v)",
-			ErrUnknownClassification, len(tileIDs), original.codes,
+			ErrUnknownClassification, countTiles(counts), original.codes,
 		)
 	}
 	if len(classifications) != 1 {
@@ -206,6 +320,22 @@ func ClassifyIrreducibleWaitID(tileIDs []int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	return classifyIrreducibleWaitIDFromCounts(counts)
+}
+
+// ClassifyIrreducibleWaitIDInt37 returns the stable classification ID for
+// closed tiles encoded as Int37 values (0..36), with lengths 4, 7, 10, or 13.
+// Repeated values represent copies; red fives project to ordinary five kinds.
+// Schema: aka37-int37/v1.
+func ClassifyIrreducibleWaitIDInt37(int37Tiles []int) (int, error) {
+	counts, err := countsFromInt37(int37Tiles)
+	if err != nil {
+		return 0, err
+	}
+	return classifyIrreducibleWaitIDFromCounts(counts)
+}
+
+func classifyIrreducibleWaitIDFromCounts(counts handCounts) (int, error) {
 	a := newAnalyzer()
 	original := a.analyze(counts)
 	if len(original.codes) == 0 {
@@ -215,7 +345,7 @@ func ClassifyIrreducibleWaitID(tileIDs []int) (int, error) {
 	if len(ids) == 0 {
 		return 0, fmt.Errorf(
 			"%w: no fixed classification reachable from (%d tiles, %v)",
-			ErrUnknownClassification, len(tileIDs), original.codes,
+			ErrUnknownClassification, countTiles(counts), original.codes,
 		)
 	}
 	if len(ids) != 1 {
@@ -225,7 +355,7 @@ func ClassifyIrreducibleWaitID(tileIDs []int) (int, error) {
 	if ids[0] < 0 {
 		return 0, fmt.Errorf(
 			"%w: no fixed classification reachable from (%d tiles, %v)",
-			ErrUnknownClassification, len(tileIDs), original.codes,
+			ErrUnknownClassification, countTiles(counts), original.codes,
 		)
 	}
 	return ids[0], nil
